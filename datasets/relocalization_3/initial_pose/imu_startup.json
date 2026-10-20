@@ -1,0 +1,13 @@
+{
+  "samples": 401,
+  "seconds": 2.0,
+  "mean_acceleration": [
+    -0.06447542943710698,
+    -0.020208313973490474,
+    -1.0001772428094002
+  ],
+  "relative_acc_std": 0.010940907982010428,
+  "gyro95_rad_s": 0.02329791510677236,
+  "forward_axis": "IMU +X projected horizontally",
+  "assumption": "initial IMU/body orientation is FAST-LIO camera_init; click denotes startup pose"
+}

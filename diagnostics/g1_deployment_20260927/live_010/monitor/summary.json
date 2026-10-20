@@ -1,0 +1,48 @@
+{
+  "cloud": {
+    "count": 898,
+    "receive_hz": 9.972932495711149,
+    "header_hz": 9.971862273332228,
+    "header_nonincreasing": 0,
+    "max_receive_gap_s": 0.11299284599999737,
+    "max_header_gap_s": 0.11415815353393555,
+    "wall_minus_header_ms_p50_p95_max": [
+      103.37197780609131,
+      108.95222425460815,
+      115.95940589904785
+    ],
+    "first_half_delay_median_ms": 103.51085662841797,
+    "last_half_delay_median_ms": 103.2717227935791
+  },
+  "imu": {
+    "count": 17993,
+    "receive_hz": 199.97423968344808,
+    "header_hz": 199.9729983371039,
+    "header_nonincreasing": 0,
+    "max_receive_gap_s": 0.025800938999964274,
+    "max_header_gap_s": 0.024483203887939453,
+    "wall_minus_header_ms_p50_p95_max": [
+      2.2170543670654297,
+      4.736757278442382,
+      7.725000381469727
+    ],
+    "first_half_delay_median_ms": 2.3093223571777344,
+    "last_half_delay_median_ms": 2.1206140518188477
+  },
+  "odom": {
+    "count": 897,
+    "receive_hz": 9.972543536927263,
+    "header_hz": 9.9719409673794,
+    "header_nonincreasing": 0,
+    "max_receive_gap_s": 0.1264055049999797,
+    "max_header_gap_s": 0.11564350128173828,
+    "wall_minus_header_ms_p50_p95_max": [
+      46.21696472167969,
+      55.13453483581543,
+      61.05542182922363
+    ],
+    "first_half_delay_median_ms": 46.83709144592285,
+    "last_half_delay_median_ms": 45.51100730895996
+  },
+  "note": "Wall minus sensor header assumes synchronized robot clocks; includes transport and is not pure computation time. Startup discovery can reduce counts."
+}

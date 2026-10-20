@@ -1,0 +1,49 @@
+diff --git a/open3d_loc/src/global_localization.cpp b/open3d_loc/src/global_localization.cpp
+index 98ba30f..3543421 100644
+--- a/open3d_loc/src/global_localization.cpp
++++ b/open3d_loc/src/global_localization.cpp
+@@ -359,6 +359,10 @@ GloabalLocalization::GloabalLocalization() : Node("global_loc_node"),
+     this->get_parameter("threshold_fitness_init", threshold_fitness_init_);
+     this->get_parameter("threshold_fitness", threshold_fitness_);
+     this->get_parameter("initialpose", initialpose_);
++    if (initialpose_.size() != 6)
++    {
++        throw std::runtime_error("initialpose must contain 6 values; check the YAML node name and --ros-args -r __node");
++    }
+     this->get_parameter("dis_updatemap", dis_updatemap_);
+ 
+     for (auto i : initialpose_)
+@@ -399,11 +403,21 @@ GloabalLocalization::GloabalLocalization() : Node("global_loc_node"),
+     pcd_map_fine_ = pcd_map_ori_->VoxelDownSample(voxelsize_fine_);
+     pcd_map_fine_->EstimateNormals(open3d::geometry::KDTreeSearchParamHybrid(voxelsize_fine_ * 2, 30));
+ 
+-    GetTfTransformToMatrix("base_link", "imu_link", mat_imulink2baselink_);
++    // DDS discovery is asynchronous. Never use uninitialized extrinsics.
++    auto wait_static_tf = [this](const std::string &target, const std::string &source, Eigen::Matrix4d &matrix) {
++        matrix = Eigen::Matrix4d::Identity();
++        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
++        while (rclcpp::ok() && std::chrono::steady_clock::now() < deadline) {
++            if (GetTfTransformToMatrix(target, source, matrix)) return;
++            std::this_thread::sleep_for(std::chrono::milliseconds(100));
++        }
++        throw std::runtime_error("Timed out waiting for static TF: " + target + " <- " + source);
++    };
++    wait_static_tf("base_link", "imu_link", mat_imulink2baselink_);
+     std::cout << "mat_imulink2baselink_:\n"
+               << mat_imulink2baselink_ << std::endl;
+ 
+-    GetTfTransformToMatrix("motion_link", "base_link", mat_baselink2motionlink_);
++    wait_static_tf("motion_link", "base_link", mat_baselink2motionlink_);
+     std::cout << "mat_baselink2motionlink_:\n"
+               << mat_baselink2motionlink_ << std::endl;
+ 
+@@ -598,7 +612,8 @@ void GloabalLocalization::CallbackScan(
+     open3d::geometry::PointCloud pcd_recieved;
+     // 单帧转换为open3d，几百us
+     sensor_msgs::msg::PointCloud2::ConstSharedPtr const_scan_ptr = scan_in_baselink;
+-    open3d_conversions::rosToOpen3d(const_scan_ptr, pcd_recieved);
++    // Localization needs XYZ only; FAST-LIO also publishes normal/curvature fields.
++    open3d_conversions::rosToOpen3d(const_scan_ptr, pcd_recieved, true);
+     // 入队列
+     // pcd_recieved
+     if (que_pcd_scan_.size() >= static_cast<size_t>(queue_maxsize_))

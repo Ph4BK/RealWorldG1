@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "bag": "/home/tim/UniGoal/RealWorldG1/datasets/relocalization_3/bag",
+  "rate": 1.0,
+  "wall_seconds": 37.58263598798658,
+  "playback_process_seconds": 22.904422791994875,
+  "poses_after_player_exit": 0,
+  "debug_artifacts_saved": false,
+  "trajectory_frame": "map",
+  "quality_validated": false,
+  "odometry_poses": 178,
+  "localization_poses": 163,
+  "registered_cloud_frames": null,
+  "confidence_min": 0.9994356036186218,
+  "confidence_max": 1.0,
+  "pose_reference": "IMU/body; identity base transforms are placeholders",
+  "trajectory_preview": "localization_bev.png"
+}

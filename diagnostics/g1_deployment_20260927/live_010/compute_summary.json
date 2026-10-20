@@ -1,0 +1,15 @@
+{
+  "frames": 930,
+  "compute_ms_p50_p95_max": [
+    35.690295,
+    40.243713,
+    43.57101
+  ],
+  "compute_mean_ms": 34.74265474193548,
+  "frames_over_100ms": 0,
+  "tree_points_last": 17940,
+  "first_last_stamp": [
+    1790500688.428843,
+    1790500781.5835357
+  ]
+}

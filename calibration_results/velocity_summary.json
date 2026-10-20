@@ -1,0 +1,344 @@
+{
+  "counts": {
+    "forward": 10,
+    "left_turn": 10,
+    "right_turn": 10
+  },
+  "trials": [
+    {
+      "number": 1,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132340_731831Z_kd_q4t3h/result.json"
+    },
+    {
+      "number": 2,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132359_313546Z_kpysjzls/result.json"
+    },
+    {
+      "number": 3,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132436_819033Z_5bh36nbx/result.json"
+    },
+    {
+      "number": 4,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132445_166211Z_gdumu_4a/result.json"
+    },
+    {
+      "number": 5,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132453_375487Z_2z_bpo_3/result.json"
+    },
+    {
+      "number": 6,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132550_010095Z_ycjd89f_/result.json"
+    },
+    {
+      "number": 7,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132557_454450Z_fs5l2y8t/result.json"
+    },
+    {
+      "number": 8,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132605_789234Z_js0fy_5m/result.json"
+    },
+    {
+      "number": 9,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132637_531890Z_2hf8w3dj/result.json"
+    },
+    {
+      "number": 10,
+      "action": "forward",
+      "command": {
+        "vx": 0.5,
+        "vy": 0.0,
+        "yaw_rate": 0.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132645_456373Z_thk56cme/result.json"
+    },
+    {
+      "number": 11,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132722_535901Z_b5maagir/result.json"
+    },
+    {
+      "number": 12,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132730_209590Z_1sly2rc_/result.json"
+    },
+    {
+      "number": 13,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132738_602254Z_rn4u4jfe/result.json"
+    },
+    {
+      "number": 14,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132759_070386Z_g6op2wjb/result.json"
+    },
+    {
+      "number": 15,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132806_358826Z_spo7065p/result.json"
+    },
+    {
+      "number": 16,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132813_265650Z_z4e57q65/result.json"
+    },
+    {
+      "number": 17,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132829_153155Z_i0sz0coo/result.json"
+    },
+    {
+      "number": 18,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132836_446284Z_y57j9gsn/result.json"
+    },
+    {
+      "number": 19,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132844_496994Z_xqi6r4xm/result.json"
+    },
+    {
+      "number": 20,
+      "action": "left_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": 1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132853_413901Z_k1kp6s91/result.json"
+    },
+    {
+      "number": 21,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132903_939105Z_kzg72qnz/result.json"
+    },
+    {
+      "number": 22,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132911_846849Z_1sua7cwf/result.json"
+    },
+    {
+      "number": 23,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132919_514996Z_lpvwj_db/result.json"
+    },
+    {
+      "number": 24,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132927_060543Z_f_zm_71f/result.json"
+    },
+    {
+      "number": 25,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T132953_581547Z_f8eq_3q1/result.json"
+    },
+    {
+      "number": 26,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T133001_660187Z_5unle5ib/result.json"
+    },
+    {
+      "number": 27,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T133009_915415Z__mn64vm1/result.json"
+    },
+    {
+      "number": 28,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T133032_217283Z_g3v5em_y/result.json"
+    },
+    {
+      "number": 29,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T133048_549746Z_kmabxts_/result.json"
+    },
+    {
+      "number": 30,
+      "action": "right_turn",
+      "command": {
+        "vx": 0.0,
+        "vy": 0.0,
+        "yaw_rate": -1.0,
+        "duration": 2.0
+      },
+      "result_json": "/home/unitree/g1_posnav/RealWorldG1/calibration_results/20261012T133056_261034Z_tfp7i5g0/result.json"
+    }
+  ],
+  "plotted_fields": {
+    "linear": "forward_m_s",
+    "angular": "yaw_rate_rad_s"
+  },
+  "linear_convention": "Signed velocity projected onto the midpoint body heading of each pose interval; lateral velocity excluded"
+}

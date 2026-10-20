@@ -2,3 +2,38 @@
 **/*.pyc
 **/*.pyo
 **/*.pyd
+.cache/
+
+# Raw recordings stay outside ordinary Git; retain their metadata.
+/datasets/**/bag/**
+!/datasets/**/bag/metadata.yaml
+/datasets/**/*.db3
+/datasets/**/*.db3-shm
+/datasets/**/*.db3-wal
+/datasets/**/*.mcap
+
+# Keep the 30 original trials and the official plot/summary.
+/calibration_results/**
+!/calibration_results/**/
+!/calibration_results/*/result.json
+!/calibration_results/*/velocity.csv
+!/calibration_results/velocity_summary.json
+!/calibration_results/velocity_summary.png
+
+# Only reviewed experimental evidence belongs in Git.
+# Other artifacts remain on disk, including logs and performance samples.
+/diagnostics/**
+!/diagnostics/**/
+!/diagnostics/README.md
+!/diagnostics/relocalization_[123]/replay/summary.json
+!/diagnostics/relocalization_[123]/replay/localization.csv
+!/diagnostics/relocalization_[123]/replay/localization_bev.png
+!/diagnostics/g1_deployment_20260927/REPORT.md
+!/diagnostics/g1_deployment_20260927/live_010/config.yaml
+!/diagnostics/g1_deployment_20260927/live_010/compute_summary.json
+!/diagnostics/g1_deployment_20260927/live_010/process.json
+!/diagnostics/g1_deployment_20260927/live_010/monitor/summary.json
+!/diagnostics/g1_deployment_20260927/replay_010_1x/summary.json
+!/diagnostics/g1_deployment_20260927/replay_010_1x/compute_summary.json
+!/diagnostics/g1_deployment_20260927/replay_010_1x/comparison.json
+!/diagnostics/g1_deployment_20260927/production_check/summary.json

@@ -1,0 +1,19 @@
+{
+  "baseline": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927",
+  "same_output_timestamps": true,
+  "poses": 298,
+  "static_end_cm": 0.416662088590738,
+  "static_max_cm": 0.8568972615026405,
+  "static_rms_cm": 0.4846797223523305,
+  "lag_definition": "Latest received /clock extrapolated to odometry callback at rate 1 minus pose stamp. Includes transport/capture scheduling; not pure FAST-LIO processing time.",
+  "valid_lag_samples": 298,
+  "lag_ms_p50_p95_max": [
+    54.1670897162021,
+    66.80120733032025,
+    75.94637543024874
+  ],
+  "first_5s_lag_median_ms": 41.211192836385635,
+  "last_5s_lag_median_ms": 49.77306957721339,
+  "position_difference_from_baseline_max_m": 0.0005866655317957609,
+  "position_difference_from_baseline_rms_m": 0.00019304880998643515
+}

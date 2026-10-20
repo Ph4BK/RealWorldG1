@@ -1,0 +1,11 @@
+<library path="g1_pose_replay_panel">
+ <class name="g1_pose_replay_panel/RedGoalTool" type="g1_pose_replay_panel::RedGoalTool" base_class_type="rviz_common::Tool">
+  <description>Record a goal pose with a red toolbar icon and red drag preview.</description>
+ </class>
+ <class name="g1_pose_replay_panel/ReplayPanel" type="g1_pose_replay_panel::ReplayPanel" base_class_type="rviz_common::Panel">
+  <description>Select a startup pose and start offline playback at 1x.</description>
+ </class>
+ <class name="g1_pose_replay_panel/LivePanel" type="g1_pose_replay_panel::LivePanel" base_class_type="rviz_common::Panel">
+  <description>Live initial pose, localization and rolling BEV updates.</description>
+ </class>
+</library>

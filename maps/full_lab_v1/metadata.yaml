@@ -1,0 +1,94 @@
+{
+  "version": "full_lab_v1",
+  "source_cloud": "source/registered_xyz.npy",
+  "voxel_downsample_passes": 1,
+  "frame": "map",
+  "units": "metres",
+  "source_run": "/home/tim/UniGoal/RealWorldG1/diagnostics/full_lab_walk/mapping",
+  "source_bag": "RealWorldG1/datasets/full_lab_walk/bag",
+  "navigation_reference": "IMU origin; positive Z above fitted floor",
+  "floor_method": "RANSAC near-horizontal floor on gravity-leveled map; project original +X onto plane",
+  "floor_fit_roi_gravity": {
+    "x": [
+      0,
+      7.5
+    ],
+    "y": [
+      -6,
+      2
+    ],
+    "z": [
+      -1.45,
+      -0.95
+    ]
+  },
+  "floor_ransac": {
+    "seed": 42,
+    "distance_threshold_m": 0.025,
+    "iterations": 3000
+  },
+  "floor_plane_in_gravity_frame": [
+    -0.012090916882384175,
+    0.007450433622630824,
+    0.9998991452980535,
+    1.2624501230190868
+  ],
+  "floor_refinement_degrees": 0.8137469156922151,
+  "floor_inlier_count": 1097867,
+  "floor_inlier_rmse_m": 0.006197817780218752,
+  "crop_frame": "gravity-aligned before floor refinement",
+  "crop_min": [
+    -1.6,
+    -7.0,
+    -2.5
+  ],
+  "crop_max": [
+    8.3,
+    3.0,
+    2.5
+  ],
+  "radius_filter": {
+    "nb_points": 3,
+    "radius_m": 0.25
+  },
+  "voxel_m": 0.05,
+  "counts": {
+    "input": 4181083,
+    "nonfinite_removed": 0,
+    "outside_roi_removed": 2550,
+    "radius_removed": 16,
+    "before_voxel": 4178517,
+    "final": 152902
+  },
+  "map_bounds": [
+    [
+      -1.440521839433285,
+      -6.990153212660815,
+      -0.3652489085138433
+    ],
+    [
+      7.805844523185765,
+      2.798803089832528,
+      3.0421448730031546
+    ]
+  ],
+  "initial_imu_xyz_map": [
+    -0.0013541243880132701,
+    0.005513250976424269,
+    1.2613043155701442
+  ],
+  "trajectory_z_range": [
+    1.24965139811781,
+    1.285604559647503
+  ],
+  "software": {
+    "open3d": "0.19.0",
+    "numpy": "1.23.5"
+  },
+  "validation": "PCD reload and rigid-transform checks passed; no relocalization accuracy validation yet",
+  "limitations": [
+    "No semantic/manual removal of people; geometric cleanup only",
+    "Floor plane inferred from mapping observations, not survey ground truth",
+    "All-height 3D map; BEV previews are density images, not navigation occupancy grids"
+  ]
+}

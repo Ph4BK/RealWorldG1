@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "frame": "map",
+  "static_bev": "bev_occupancy.npz",
+  "localization_map": "map.pcd",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2738,
+      "sha256": "bc484d2614ce08ffcc827109514cc70b5284a8120497904cf0e467baeb3224f7"
+    },
+    {
+      "path": "map.pcd",
+      "bytes": 1876813,
+      "sha256": "764cc16d12f3e382dcff738f04106129c772b9a0cc3153b203553cf67f60b976"
+    },
+    {
+      "path": "bev_occupancy.npz",
+      "bytes": 3641,
+      "sha256": "0245eddcb5bb194c065d09d5146767c8c13ab96529021afe05ef4c1407fb6320"
+    },
+    {
+      "path": "bev_config.json",
+      "bytes": 993,
+      "sha256": "680e59f5e63d3a1e52c46ed93248d4a391ee0a1faa1bb4ed3bd7112233857bd2"
+    },
+    {
+      "path": "metadata.yaml",
+      "bytes": 2223,
+      "sha256": "a807d468975c3687b0eeea0c1e3cf929bb7ab99ed073c0000754fcaa0f43cc50"
+    },
+    {
+      "path": "T_map_from_camera_init.txt",
+      "bytes": 406,
+      "sha256": "1f52cc6cb04a221d0b4df79892e42322248e8d3afe7d61655e0eab4e9129d723"
+    },
+    {
+      "path": "T_map_from_gravity_level.txt",
+      "bytes": 402,
+      "sha256": "388d9e5d6ca6dcb6b4fb87b2df3aa45fdfe762b7c95849bf10e6f7cdc10f25d0"
+    },
+    {
+      "path": "provenance/mapping_config.yaml",
+      "bytes": 1223,
+      "sha256": "9d6859d6125cfaa2688af2358dd5ca5943cf0283bc1afbc1d6ca90f2891df745"
+    },
+    {
+      "path": "provenance/freeze_reference_map.py",
+      "bytes": 9974,
+      "sha256": "bfb6aa7ec0aaada57ffc67dcc80e7229303a0c00c5712aac6ee2d144cd2aad6f"
+    }
+  ],
+  "repository_rebuild_tool": "RealWorldG1/tools/build_static_bev.py",
+  "raw_recording_retained_outside_package": "RealWorldG1/datasets/full_lab_walk/bag",
+  "cleanup_executed": true
+}

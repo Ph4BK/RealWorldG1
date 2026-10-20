@@ -1,0 +1,77 @@
+Panels:
+  - Class: g1_pose_replay_panel/ReplayPanel
+    Name: G1 Localization Replay
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Fixed Frame: map
+    Background Color: 25; 25; 25
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Reference map
+      Enabled: true
+      Topic:
+        Value: /reference_map
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+      Color Transformer: FlatColor
+      Color: 98; 160; 234
+      Position Transformer: XYZ
+      Style: Flat Squares
+      Size (m): 0.035
+      Alpha: 1
+      Decay Time: 0
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Current scan
+      Enabled: true
+      Topic:
+        Value: /cloud_registered_1
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Depth: 5
+      Color Transformer: FlatColor
+      Color: 255; 255; 255
+      Position Transformer: XYZ
+      Style: Points
+      Size (Pixels): 2
+      Decay Time: 0
+    - Class: rviz_default_plugins/Pose
+      Name: Selected startup direction
+      Enabled: true
+      Topic:
+        Value: /initialpose_preview
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+      Color: 0; 255; 0
+      Shape: Arrow
+      Shaft Length: 0.5
+      Shaft Radius: 0.03
+      Head Length: 0.2
+      Head Radius: 0.08
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Value: /initialpose_2d
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 5
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Target Frame: map
+      Angle: 0
+      Scale: 65
+      X: 3.3
+      Y: -2
+Window Geometry:
+  Width: 1200
+  Height: 900

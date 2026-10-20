@@ -1,0 +1,103 @@
+Panels:
+  - Class: g1_pose_replay_panel/LivePanel
+    Name: G1 Live BEV
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Fixed Frame: map
+    Background Color: 80; 80; 80
+    Frame Rate: 10
+  Displays:
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Original static BEV (binary)
+      Enabled: false
+      Topic:
+        Value: /g1/bev/static_display
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: Last 10 frames local BEV (binary, exterior transparent)
+      Enabled: false
+      Topic:
+        Value: /g1/bev/local_display
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Updated task BEV (binary)
+      Enabled: true
+      Topic:
+        Value: /g1/bev/task_display
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: Selected initial arrow (IMU)
+      Enabled: true
+      Topic:
+        Value: /g1/live_bev/initial_arrow_display
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: Current robot pose (IMU)
+      Enabled: true
+      Topic:
+        Value: /g1/live_bev/robot_display
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: PosNav goal pose (red)
+      Enabled: true
+      Topic:
+        Value: /g1/live_bev/goal_display
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: STG macro (snapshot point)
+      Enabled: true
+      Topic:
+        Value: /g1/live_bev/stg_macro
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+    - Class: rviz_default_plugins/Marker
+      Name: Circular update boundary
+      Enabled: true
+      Topic:
+        Value: /g1/live_bev/update_region
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Value: /g1/live_bev/initialpose_2d
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 5
+    - Class: g1_pose_replay_panel/RedGoalTool
+      Topic:
+        Value: /g1/live_bev/goal_2d
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 5
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Target Frame: map
+      Angle: 0
+      Scale: 65
+      X: 3.3
+      Y: -2
+Window Geometry:
+  Width: 1200
+  Height: 900

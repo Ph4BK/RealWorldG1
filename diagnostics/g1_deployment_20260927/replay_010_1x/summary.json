@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "bag": "/work/input_bag",
+  "rate": 1.0,
+  "wall_seconds": 39.71726582499991,
+  "playback_process_seconds": 33.74444453299998,
+  "poses_after_player_exit": 0,
+  "quality_validated": false,
+  "odometry_poses": 298,
+  "localization_poses": 0,
+  "registered_cloud_frames": 298,
+  "confidence_min": null,
+  "confidence_max": null,
+  "pose_reference": "IMU/body; identity base transforms are placeholders"
+}

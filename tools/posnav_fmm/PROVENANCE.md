@@ -1,0 +1,9 @@
+# 算法来源
+
+2026-10-06 从本仓库 Go2 实现复制，运行时不引用 RealWorldG1 外的代码。
+
+- `src/utils/fmm/fmm_planner_policy.py` SHA-256: `3c1372973ccf51e6c0d79768eba4d8072d97c150fc16e01786ff14e70bac9487`
+- `src/envs/real_world_local_planner.py` SHA-256: `aac9ed808560f20d65533878ef98f87957e6b5c40375d38220fc93bc65cd9d36`
+- `src/agent/unigoal/agent.py` SHA-256: `a17e8c12c5856d3b88044b17205146de1f5cdc5e9dc342c631c1d179aaa04114`
+
+保留 FMM mask/dist、set_multi_goal、STG 数值算法及 supercover 选点；删去未使用的另一版选点、自动移动目标和缩放分支及无关依赖。包装层参数由 G1 配置指定。

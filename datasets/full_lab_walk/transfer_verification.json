@@ -1,0 +1,8 @@
+{
+  "source": "/home/unitree/g1_diagnostics/full_lab_walk/bag",
+  "sha256": {
+    "bag_0.db3": "588c97b65e8130b8c31162dea52e6b145db4b65aa8fe07ba81aedd3ed4abcd64",
+    "metadata.yaml": "ed2b5609559482d4be80301ee42fec7a1ea9c07a3d8918ab251520059a1eb20e"
+  },
+  "all_matched": true
+}

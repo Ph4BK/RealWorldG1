@@ -1,0 +1,1609 @@
+{
+  "status": "approved_suggested_list_deleted_optional_deployment_retained",
+  "created_client_date": "2026-10-06",
+  "retain": [
+    "RealWorldG1/maps/full_lab_v1: files listed in package_manifest.json, plus checksums.sha256",
+    "RealWorldG1/datasets (all raw bags, initial poses, annotations)",
+    "RealWorldG1/diagnostics/relocalization_1",
+    "RealWorldG1/diagnostics/relocalization_2",
+    "RealWorldG1/diagnostics/relocalization_3",
+    "RealWorldG1/tools",
+    "RealWorldG1/fastlio",
+    "RealWorldG1/third_party"
+  ],
+  "notes": [
+    "每个文件的路径/大小/SHA-256 是本轮快照；将来删除前核对，避免删除后续新增实验。",
+    "BEV 可以从保留的 PCD 精确重算；原 FAST-LIO 几何输出可重新运行获得，但不承诺逐字节一致。",
+    "历史日志、耗时及现场性能证据不可原样重建，不应把所有删除候选都称为可再生缓存。",
+    "地图包旧 source/ 和图片仍在原位，没有复制到另一份归档。"
+  ],
+  "groups": [
+    {
+      "category": "static_build",
+      "path": "RealWorldG1/diagnostics/full_lab_walk",
+      "note": "正式地图已保留，回放输入 datasets/full_lab_walk/bag 及正式 provenance/mapping_config.yaml 保留；几何中间产物可重算，现场日志/耗时不能原样重现，临时绘图脚本及特定旧版式不再保留。",
+      "file_count": 26,
+      "bytes": 52578924,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/README.md",
+          "bytes": 2030,
+          "sha256": "b7cc320a22d4fc5063a7ace077257083f0acddf6f5159cf0aea8cc09e2e81c02"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/bag_audit.json",
+          "bytes": 2792,
+          "sha256": "a002f3f5ca94b8d2caec21940c15a5f0612277bc6a727950219b96bb4f921755"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/config.yaml",
+          "bytes": 1223,
+          "sha256": "9d6859d6125cfaa2688af2358dd5ca5943cf0283bc1afbc1d6ca90f2891df745"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/first20_registered_bev/bev_accum_05_frames.png",
+          "bytes": 75504,
+          "sha256": "b806c2d0c8f1ee19e645a25a0e593ac4210e7a5986e62e2a27c31651030f2ffa"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/first20_registered_bev/bev_accum_05_frames.png~RF7d58e4d.TMP",
+          "bytes": 51300,
+          "sha256": "6f4873699608167fd5d62fcd922cf95a65ab4ee2d577207dc2626d53f06a7bb7"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/T_level_from_camera_init.txt",
+          "bytes": 406,
+          "sha256": "3ee5fa8a4ed09424ecb4ea0605a1479505cac95508642c2c462bf8117615a819"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/bev_xy_leveled.png",
+          "bytes": 133701,
+          "sha256": "fd38f44a38426e9d707ef6455a2bb482b773c86871f93c016f031528e819320f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/bev_xy_leveled_detail.png",
+          "bytes": 218959,
+          "sha256": "823b313e37ec204ec9d4d7b0bbac8914de5d3164365a45fe4d90a1f88b239493"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/bev_xy_leveled_detail_no_trajectory.png",
+          "bytes": 155412,
+          "sha256": "e113e4da7a3abdc8ac27279c9f6e1df40c84e24b105260f1dbaa18c9ba592478"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/bev_xy_raw.png",
+          "bytes": 136340,
+          "sha256": "6d2ea75354f7125b522a167e1b2a759d449d850dff49ca8a8a60eb60e8dfc20f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/detail_view_bounds.json",
+          "bytes": 149,
+          "sha256": "a391b5dd461c3bd2cf166a4e705bf1bc56a12f5c15342417d0b91c699c3bd888"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/map_raw.pcd",
+          "bytes": 1180441,
+          "sha256": "efb1eeea39a2fa727994a4a8e6de53eb893476d7b8df4769350ee3235570a726"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/mapping.log",
+          "bytes": 1329,
+          "sha256": "abd6509adde44026a9336f184564eaf502ce63c3e4314714238bed6b6ab2dde6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/odometry.csv",
+          "bytes": 172731,
+          "sha256": "557be8676da7bf6704e08819b5c76edd4472e95b7a5072edb69764b5d89fbc14"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/output_timing.csv",
+          "bytes": 112229,
+          "sha256": "1756da202d720f83f18a2555d8f27eb47358b94cb61b2b1ebef3b8764eaf5af9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/playback.log",
+          "bytes": 656,
+          "sha256": "71c30c75d7c0902e485e714f19ba4c26e4a42ccc65f6e1c986aa4b90d2ad8d6f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/registered_xyz.npy",
+          "bytes": 50173124,
+          "sha256": "4bd6b24685a76aa6c8243d9382f20c7a266ab8fd22edb58af30fc08f4ae141c1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/ros_logs/fastlio_mapping_87204_1790504825707.log",
+          "bytes": 421,
+          "sha256": "a30adfbd4f24839cfa8ff390ea9850b50c07f7fc6177defc1021cd8b2ab43d30"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/ros_logs/python3_87122_1790504825076.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/ros_logs/python3_87220_1790504826354.log",
+          "bytes": 356,
+          "sha256": "3652af650a9031d5c52a68973b62d0b37c1cd0a4a80fbd703da2d5ffd1436867"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/summary.json",
+          "bytes": 470,
+          "sha256": "1a35f54138d8f140b58410a85f7357d265c06c2855fb5469706b50215004d06c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/trajectory_time.png",
+          "bytes": 155368,
+          "sha256": "8b2872c771681e6d55c23d102cabbb4e1f48c3ee3993e7f7a6435ceaa4defd74"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/mapping/visualization_summary.json",
+          "bytes": 624,
+          "sha256": "e39535854f5d87a44c52ee33ad6eb2e1cc036b85d221e1b058928af8dd58f718"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/plot_detail.py",
+          "bytes": 2142,
+          "sha256": "4b2b72fa2e08da82acb757b2719bfebfb59a2ea4295a9e36e9e2b52f12afe23c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_walk/plot_detail_no_trajectory.py",
+          "bytes": 1192,
+          "sha256": "bd954d536496a6032503052dd175650afde675dd924e661eec0022752f857ee9"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "static_build",
+      "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection",
+      "note": "正式阈值2占据图已复制到 maps/full_lab_v1；counts、阈值2/3、筛选点云和预览均可由 map.pcd 重算，tools/build_static_bev.py 已独立保留。",
+      "file_count": 12,
+      "bytes": 1292719,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_binary_min2.png",
+          "bytes": 4083,
+          "sha256": "7361e4d1e65399f5bbd3a86788bd587cea57a86568224cb1697f20fb5528e0e6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_binary_min2_preview.png",
+          "bytes": 65727,
+          "sha256": "fb15a22926bbe9e6517388ee782386f54a53d5e4fa56a8a2fc09591113018fc3"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_binary_min3.png",
+          "bytes": 4044,
+          "sha256": "6e4c61e14ecf4bd4a75bfcc8d741f2257446afbfe0cb1b86f0d7eaef3367adbc"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_binary_min3_preview.png",
+          "bytes": 65632,
+          "sha256": "0157c72aaafa909def61e3e8fbf3fbb711cae8d4c553a8d888a03975299cb2a6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_counts.npz",
+          "bytes": 14770,
+          "sha256": "584ac7bf9de337bcf63887247e0d105a2b7d9d5f0322ae937b97908b91875d4e"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_grayscale.png",
+          "bytes": 12627,
+          "sha256": "82c9f109302abf250c01281e72fef3968c794dbce5d08633739fa621eb314a39"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_occupancy_min2.npz",
+          "bytes": 3641,
+          "sha256": "0245eddcb5bb194c065d09d5146767c8c13ab96529021afe05ef4c1407fb6320"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_occupancy_min3.npz",
+          "bytes": 3696,
+          "sha256": "a6b1881373027738ff26834754358ea52f441d7152dda071b12287495c473f60"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/bev_preview.png",
+          "bytes": 118320,
+          "sha256": "245423aa1806440a33b8cf195057c3d849477446d9fe678810a2f99bab168b42"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/generate.py",
+          "bytes": 2144,
+          "sha256": "0a1d736a689887df2f4238501d77a1859ac8bf1715e1a824226d43d40fef03f2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/height_0.05_1.30.pcd",
+          "bytes": 997622,
+          "sha256": "ef44af8eb613fd167bf95224a543e0e057f01ad4fcff64f19321805499a6d7b2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/full_lab_v1_height_projection/metadata.json",
+          "bytes": 413,
+          "sha256": "2d7287e39da86e8945b7e8ec8f25a7687fed1a9a9c589b47925ba278489f6c2f"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_mapping_experiment",
+      "path": "RealWorldG1/diagnostics/voxel_grid_20260927",
+      "note": "旧体素参数网格实验；原输入已更名为 datasets/small_area_walk/bag 并保留。几何输出可重算，旧实验报告、时序、失败日志不可原样重现；删除意味着放弃这些历史证据。",
+      "file_count": 181,
+      "bytes": 119389935,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/README.md",
+          "bytes": 2966,
+          "sha256": "17d7d1dfc0c4359fd5ac83e0628a627e6b4c1a9e0884d7f1db1fff1ab8590383"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/RESULTS.md",
+          "bytes": 2045,
+          "sha256": "b7599e79698a6930231c6eb9db5b7d3b4925be5491d204fa5a1f85f9e8e7caa5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/bag_audit.json",
+          "bytes": 2803,
+          "sha256": "5299d372ca96a69ee0125c2261cf4f535f98f75f1b4ae44832cfe4237bcc5819"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/bev_grid.png",
+          "bytes": 479649,
+          "sha256": "5dc73a7a3dc0df15ccd2671f9f17072788c27b2abb840f71e86fd91d4fe42fb9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.10_map_0.10.yaml",
+          "bytes": 1117,
+          "sha256": "86a8b2e24ef93c470ac855389464c96b61ce365c578ddedd639b16043a84eb5b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.10_map_0.15.yaml",
+          "bytes": 1118,
+          "sha256": "1ebf348f86512e06c4c08f5a2a15cfb34e05b331499b3bc9fb5ed5596791e4c9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.10_map_0.20.yaml",
+          "bytes": 1117,
+          "sha256": "4231fc9d30ff896aa20ceebb5817ec5c958403104fd40f1708c499d2907c1102"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.15_map_0.10.yaml",
+          "bytes": 1118,
+          "sha256": "f35a86313b919f1e860a1fb4667ded939a2c9f7e7ba364b2b3cf48b73a3b29b7"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.15_map_0.15.yaml",
+          "bytes": 1119,
+          "sha256": "aa14e2c550079618b5efd26ff10eeca2ef88a486699f2cf16866761fac91d646"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.15_map_0.20.yaml",
+          "bytes": 1118,
+          "sha256": "997e6ffae27e8549ab36ff0249d57ae27d4d4db482906ece853e8f17276fb337"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.20_map_0.10.yaml",
+          "bytes": 1117,
+          "sha256": "5440c1c75dfb8217b1cb776f09d3548e766a04e96929b152c87b18899174c84c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.20_map_0.15.yaml",
+          "bytes": 1118,
+          "sha256": "83ff13b300b849d10addcab0ab7b03ad3ce654165099bf363527288902d225ea"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/configs/surf_0.20_map_0.20.yaml",
+          "bytes": 1117,
+          "sha256": "999212765552c8e849d69abda094c74e8aeb0394a2873b86481067029ce104fc"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/execution.json",
+          "bytes": 927,
+          "sha256": "c7079f06c7c365cfe476010d91e1be9e74d4828e49cb33e98f57f0c86c2c751b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/manifest.json",
+          "bytes": 2244,
+          "sha256": "67c3fd30da827e2cb61276945ac1dd7a310d81acdf8a49d4d1e289e8269c693c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/metrics.csv",
+          "bytes": 2732,
+          "sha256": "bd3b1b63dc38e87144ed9b441bf931ae8c19112f1b9ddbcb1bb7ca95e0479bfe"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/metrics.json",
+          "bytes": 6532,
+          "sha256": "3cf3f2e7b4f9c9d73747da4932ea33fda1b19434298a5ccd9ff9811b4a3b771c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.10/mapping.log",
+          "bytes": 1030,
+          "sha256": "60ecfc64910200bf5361aa257b0de0e1b20f972f2b0c65d6b3ac84f5038d29b3"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.10/odometry.csv",
+          "bytes": 47618,
+          "sha256": "8b007db7a15fcd5b74cd9fc1d3b63a18d3f0b9d17703327b1b550bc2c9b9f7f9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.10/playback.log",
+          "bytes": 612,
+          "sha256": "1b4aa5e55eae5416e91eaceea513f6f5e432548a4e80f6081df5a13e13da7157"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.10/summary.json",
+          "bytes": 371,
+          "sha256": "b4156aedcae08f014098a48a1275187fd19b68b2cc1f37e7f33e28efa80a0446"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.20/mapping.log",
+          "bytes": 1030,
+          "sha256": "8291f3902872f6aa6eaacde5663cf047c93582961634f2087e7e35e2a73d821f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.20/odometry.csv",
+          "bytes": 47624,
+          "sha256": "2bcf4399ee977b15499efa37cf1f7fab51398be612a9d9f8e115740a060a3957"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.20/playback.log",
+          "bytes": 612,
+          "sha256": "a4708343828344f54ffce5e3fcda9576a8ddc83b6e49f5d22c95477f89f6dc1b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.15_map_0.20/summary.json",
+          "bytes": 371,
+          "sha256": "b4156aedcae08f014098a48a1275187fd19b68b2cc1f37e7f33e28efa80a0446"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.10/mapping.log",
+          "bytes": 1030,
+          "sha256": "3498f6ed64dd49090e75920f4fc6f07f01b039c854116f27ad809f91c20e1555"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.10/odometry.csv",
+          "bytes": 47649,
+          "sha256": "ce81266bee69a44a3f60595f8294e18d592de4c40f91fa24cfc1225e5556b892"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.10/playback.log",
+          "bytes": 612,
+          "sha256": "5e72a453b13840d9e0448e92b5c7598bc3a74f0c2b17e5affbfbbf55a665a55a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.10/summary.json",
+          "bytes": 371,
+          "sha256": "b4156aedcae08f014098a48a1275187fd19b68b2cc1f37e7f33e28efa80a0446"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.15/mapping.log",
+          "bytes": 1030,
+          "sha256": "66156b420ae2030d05e52e571e7305623196ec2a0ae9d90a117d14a5df90ab94"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.15/odometry.csv",
+          "bytes": 47588,
+          "sha256": "048e3f4272a4323cd6020fd5ac446f208f3b3cb84cd51e90bcc296bffc40a525"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.15/playback.log",
+          "bytes": 612,
+          "sha256": "c03122507d6076122100a844703a3e5624fa6bcbc68d155afc9803a7a34104eb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/rejected_startup/surf_0.20_map_0.15/summary.json",
+          "bytes": 371,
+          "sha256": "b4156aedcae08f014098a48a1275187fd19b68b2cc1f37e7f33e28efa80a0446"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/retries.json",
+          "bytes": 212,
+          "sha256": "3212268cd3239aa08f8da8f83ac0da2fdfe3aefb91100f5b8a1d3db0c3ab562a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/static_drift.png",
+          "bytes": 307879,
+          "sha256": "89efdcd80e531796233e350d786de4c3c1a629cee04aaa617ade1ded7aaaf7ca"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/bev_xy_leveled.png",
+          "bytes": 127013,
+          "sha256": "0e96884d2a3b1530ff1b8f855631efa176d0253c2b49de01f51b45c88a987189"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/bev_xy_raw.png",
+          "bytes": 128756,
+          "sha256": "400033015ef9e2825acb995c954b114a36051ae82b2bf49406584114d577d3da"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/map_raw.pcd",
+          "bytes": 543961,
+          "sha256": "6a86078263b0d63ec1a672a13a1ea1074a84a627a156e17b90117e7545515ebe"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/mapping.log",
+          "bytes": 1049,
+          "sha256": "5cc642d987ccae242721257d511cde5739106d79b493bf8cda2135b4b20c33f0"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/odometry.csv",
+          "bytes": 48779,
+          "sha256": "f3226fe40c52ae7e13a77e30b61687100a1314937d430827c0994345036eadb2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/playback.log",
+          "bytes": 612,
+          "sha256": "11e854aa1a0aae21b398ae08eacbdd1a53ad1ba193f4ef3f915ffcd70ad1ee12"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "24fc4db5ab891ad3a28f9e64b89fdb1ae17b5fc699620eedad2175ca71a056e1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/ros_logs/fastlio_mapping_26624_1790485084927.log",
+          "bytes": 438,
+          "sha256": "1abe8be2e3d1dbdc40767b5c26ab9eabd13c301e190ae7b8cc174e7f12b13e3b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/ros_logs/python3_26571_1790485084085.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/ros_logs/python3_26678_1790485085578.log",
+          "bytes": 312,
+          "sha256": "b9699429e8aead43d8cee3cd6135cf2344863dc091cd238313177d74b1f40dee"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/static_metrics.json",
+          "bytes": 685,
+          "sha256": "122173e2692896b90f67539b965722539e2ea9178c96349571f0d43da1b1a621"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10/visualization_summary.json",
+          "bytes": 624,
+          "sha256": "8fdba699fa1c91079a3525ac4b6257cbf01a9bc4e29b9c51ff74b32979ac6998"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.10.log",
+          "bytes": 649,
+          "sha256": "98e9af18ca4c1facfd4d1956cf9f578851556a788f0523b3f642e260d185c33c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/bev_xy_leveled.png",
+          "bytes": 126360,
+          "sha256": "267bf7323f684f60bad51ed251e7b174d58c8930568d7988a29b84b4855c6dad"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/bev_xy_raw.png",
+          "bytes": 129543,
+          "sha256": "d68b6f3289c840d13b61022f4d1b348507eb4a93394961c976ba702bf881359a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/map_raw.pcd",
+          "bytes": 262967,
+          "sha256": "8a7dd4ada1399b0a2892152c92cfb0b46f507f5f7341280c52923aaac1f5bd2c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/mapping.log",
+          "bytes": 1049,
+          "sha256": "d65607f1d4314b322362b5a9dc28e5914ea614308a13655ae14ad75fdc2be0a5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/odometry.csv",
+          "bytes": 48758,
+          "sha256": "f81d712c031382942c42bd6ff1fcbd7293361ce14ac538cea6c7bb7f7effd3a4"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/playback.log",
+          "bytes": 612,
+          "sha256": "c80dd55b150b90c76bd9c7367344e2b48223d79ce5f5fcb3d40ef390c1437106"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "c06f70647ba2d29a6cab1f6832299e46aa370392771753915235dd674bebd051"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/ros_logs/fastlio_mapping_26626_1790485084936.log",
+          "bytes": 438,
+          "sha256": "1322e288df6d67aa8048e002a4d2e0eafc2c53cb8bb809dfb325b30b658d7eae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/ros_logs/python3_26574_1790485084079.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/ros_logs/python3_26676_1790485085578.log",
+          "bytes": 312,
+          "sha256": "09b4684121608b64de0df082aa7cdfb7a34d7429dcd9a14944087652be09f590"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/static_metrics.json",
+          "bytes": 681,
+          "sha256": "f93d7e5801acbd1dcb6c85f5a6753c7c79598d80342598bc0c48f8de4e6dea1b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15/visualization_summary.json",
+          "bytes": 623,
+          "sha256": "934a726e5a03690179873add59a18932159bce6867e1ff2d2bc4dffb3718aacc"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.15.log",
+          "bytes": 649,
+          "sha256": "4ce2aa65a090ba439c053993c960fc9256a83628da6368e7c09b98d04306eb2e"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/bev_xy_leveled.png",
+          "bytes": 126861,
+          "sha256": "96d288a28f6805551d38ff3d4cbad8ae7fce08854628f43601e1394998d7cbc3"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/bev_xy_raw.png",
+          "bytes": 128911,
+          "sha256": "7643f4e1e3a103a58056aaf5c961faa9b93b75102d28b80960a3e4b0f1090da7"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/map_raw.pcd",
+          "bytes": 158391,
+          "sha256": "4c3db891ec2833879b9870c8880f6c4ff27f0dfbe15100e48519a30b714e255c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/mapping.log",
+          "bytes": 1049,
+          "sha256": "3749c6a734a015482b35ed7287bb9478deaa63ec6913653001504263955f96e6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/odometry.csv",
+          "bytes": 48683,
+          "sha256": "dfa42498134eae661bd691f47ad41825cd7945e0c51fa4acd8f2c0bc726faf5a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/playback.log",
+          "bytes": 612,
+          "sha256": "f0da8e60598829a0cb9f0ceb2b9e1e334db7e7252ffbceac2a4eae02c90007a8"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "82fbd59cf95626d578ca6edf2e9571dec80bdac7223ae654887a15af9d86884a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/ros_logs/fastlio_mapping_26625_1790485084927.log",
+          "bytes": 438,
+          "sha256": "c8bcf03b7433645091a3d6d71e20cb86734757e24df29a93370b149ba550726c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/ros_logs/python3_26573_1790485084079.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/ros_logs/python3_26677_1790485085579.log",
+          "bytes": 312,
+          "sha256": "da67c4320d8549cd57d7e244f185895449faa1b3795e075097036c97799cf2e4"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/static_metrics.json",
+          "bytes": 681,
+          "sha256": "756c6c13e7b4d739547763e4693c6e20edfd2389f2a0317c231c8c642a080b60"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20/visualization_summary.json",
+          "bytes": 623,
+          "sha256": "eb8063c2817e2c26f60cc400764deec634c3eb4115b03f41532b9f453ecc4967"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.10_map_0.20.log",
+          "bytes": 649,
+          "sha256": "67a95a8260abac9f25233483b7fbc34a16b30b2783cf1df1a6048dc5fe10eba9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/bev_xy_leveled.png",
+          "bytes": 126811,
+          "sha256": "a24596186e2252be34791f280c02b60b6cab672997969a37bf61594b834211b6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/bev_xy_raw.png",
+          "bytes": 128531,
+          "sha256": "94f8274579da1e292e8cb2f703103c95c4013bc72cffad1392e552b68220ff8f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/map_raw.pcd",
+          "bytes": 525849,
+          "sha256": "b1d98e0e54bc8d7b1b12b7701dc6a2e7d6d35ec30e579145b37b3c37d1e53edb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/mapping.log",
+          "bytes": 1049,
+          "sha256": "d78bc324f2ad61377b2379834bca47a21b0ce8258654ee1bab4991f194b57fee"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/odometry.csv",
+          "bytes": 48802,
+          "sha256": "1cf1e82b9a0b0ba06ee6cd4bad46b8e82479e78b9a1926d1b10916f4db213c3a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/playback.log",
+          "bytes": 680,
+          "sha256": "373a08ccf67e14755922d4677cbf2ad489a6d770f17a282fbb9e2c4aae6a1918"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "4ffcd5c2083a59ee330212cbadd6a3444a5d66d5890691f2b0899dae2bcc3ca4"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/ros_logs/fastlio_mapping_29322_1790485488144.log",
+          "bytes": 438,
+          "sha256": "066894c00bfe7b540b42976ff9cb1bd284a363791f8675a81f8fa9c23b7d8a53"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/ros_logs/python3_29236_1790485487557.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/ros_logs/python3_29370_1790485488812.log",
+          "bytes": 380,
+          "sha256": "931cdfc8b5f13acce6a0cd60b2fbf61a167d2768c867658db7714ae60579f4f5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/static_metrics.json",
+          "bytes": 681,
+          "sha256": "27b99b2a9d2e06e93809c2e38ed2906028341ee4f32d99d516318c81468f951f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10/visualization_summary.json",
+          "bytes": 623,
+          "sha256": "d96f0543e171dbd6ddf8cf12b1b55b221bc3f2e82277928dec24d5d6cab23adb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.10.log",
+          "bytes": 649,
+          "sha256": "6227a670a950bb38a5174e384190260ae5e5f2b92c869124f401ed45d6a3973b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/bev_xy_leveled.png",
+          "bytes": 126596,
+          "sha256": "98b415afe253eff0b8bf33bb8b24da7fdab47a46798c93ebc1e3077178e57b8e"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/bev_xy_raw.png",
+          "bytes": 129273,
+          "sha256": "66dd6b517cca6027a35b2b59d96a2d8f686750fc3ef7442e5244a77fb4ef483b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/map_raw.pcd",
+          "bytes": 256087,
+          "sha256": "462ae5a63fa118bccf12af5f66eede5ac700a1e8a5149b89f121d355b7c69cfb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/mapping.log",
+          "bytes": 1049,
+          "sha256": "fe8cfb2d85e8b656846bf01180ec42d1d07d9cf1239c2c82c0313d5dac2de9ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/odometry.csv",
+          "bytes": 48804,
+          "sha256": "55d6b995c771cd33729a3c4f1852f5ce390435bc1c76cd4ede70453c12a13971"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/playback.log",
+          "bytes": 612,
+          "sha256": "761d785e401efca9613c64198e69f6b80d8b1867025fc145c952f4be4fc435b0"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "876a0e03c45570628bf39d7ece839e9a5feedf46f449ccf0c6cc3af1c317f4a2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/ros_logs/fastlio_mapping_27454_1790485212823.log",
+          "bytes": 438,
+          "sha256": "698360147e90ae47119352e28d0d9b17d2da94df462def4a6db7d1de45cb0fa3"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/ros_logs/python3_27402_1790485212269.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/ros_logs/python3_27502_1790485213495.log",
+          "bytes": 312,
+          "sha256": "3c012f412362e56b1b1d1515165c63619c5abda3b5e4dc4e6f0ef8c139c45e5b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/static_metrics.json",
+          "bytes": 688,
+          "sha256": "24a608caf3ee50981698a2cfba443917a481067e0239f05ffe49faff69b6e336"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15/visualization_summary.json",
+          "bytes": 625,
+          "sha256": "51c46eaeab4672f7c876f4a04db5810c2204babea48a73a66510826df415baf5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.15.log",
+          "bytes": 649,
+          "sha256": "d4359c304b6d934ca3275091f8dc85dbaa089b78247ddf63e30f1341836c5d30"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/bev_xy_leveled.png",
+          "bytes": 126825,
+          "sha256": "c6f53823bdbcd5a29b4c0426276e137915c6cac33d276387347920a0a9d75afc"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/bev_xy_raw.png",
+          "bytes": 129889,
+          "sha256": "5a035f20ebab4994fd208e00d72455328f6d3cd747862701be134c3484c2b93f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/map_raw.pcd",
+          "bytes": 154071,
+          "sha256": "474b154709be202dd243dd9d744f72972a9d01f3a40d91f827ee288e7e39427d"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/mapping.log",
+          "bytes": 1049,
+          "sha256": "d8759de119a9de58e3a279e46f73debaaeba468e2c4b15718e28784dd4a569bb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/odometry.csv",
+          "bytes": 48838,
+          "sha256": "5f68a39f00b966b590cb143dcc8be0b6c0f21bfe46382f3d454e31e9cb742cf8"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/playback.log",
+          "bytes": 680,
+          "sha256": "96f7c4576abcd5bfae406cf5d954fc0455112269a460644a2d9abe474ffb7119"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "3151ee6d3bb9f420aec8c9a160ff8c7bf532992ff246855addc367008ce72de1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/ros_logs/fastlio_mapping_29321_1790485488137.log",
+          "bytes": 438,
+          "sha256": "ad598d69563d71109ec0657ef9561f0b5b6ab6aada3e738fee58d8ab6dfb905a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/ros_logs/python3_29238_1790485487538.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/ros_logs/python3_29368_1790485488767.log",
+          "bytes": 380,
+          "sha256": "2be7f262744020bbbae1865e3176f700117605c1830dd4d868d4f7ed74f15c6f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/static_metrics.json",
+          "bytes": 684,
+          "sha256": "30507144a7392f8a9697c308edd18d227c08f3e2434d2415a28cdf7810e1f2b1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20/visualization_summary.json",
+          "bytes": 623,
+          "sha256": "6001bab1522b01dcb66b6f37c57e4c763143d3d0ab6dcaee035b59b227f1b05f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.15_map_0.20.log",
+          "bytes": 649,
+          "sha256": "71749668c49dcfa2de20a31bee8f06cf512fc9c5d5c6b3ac0bde9d3ccd483061"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/bev_xy_leveled.png",
+          "bytes": 126969,
+          "sha256": "f11f94cfd44537c45040fdf9db01eee1f9e023befa77684c9a76c2ffc975105c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/bev_xy_raw.png",
+          "bytes": 129035,
+          "sha256": "6d8b0cd76c41d829906eb825707c7595aa37de6a29fc723af71c24aac8f3070e"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/map_raw.pcd",
+          "bytes": 510009,
+          "sha256": "d470d5fd5ab5f41a8cd1bb38d543db67534bc64e0fa5a6fb76b77774f1e6eaa5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/mapping.log",
+          "bytes": 1049,
+          "sha256": "94fab95c6a762690993cfe5f51388fcf8c13020391b71b0b6c451d17a68e5fe0"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/odometry.csv",
+          "bytes": 48860,
+          "sha256": "3eb2639d2d2cae697f64a6405f304b297b8f61fc1da0eedd391fbc8709eff04b"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/playback.log",
+          "bytes": 680,
+          "sha256": "ee68f31a2a0403674b2bd378c2430017a13b8ae1ca2a33cadbcff845512da10d"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "ae1572f4c5f3e7170b4098023d6884eeb3d8186a7fe4363b65a82775a8fe3626"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/ros_logs/fastlio_mapping_29320_1790485488127.log",
+          "bytes": 438,
+          "sha256": "811d0a9b5d90d41d1d79dea568afbe44240f885d6540d5b68703208f29bda912"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/ros_logs/python3_29239_1790485487539.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/ros_logs/python3_29369_1790485488788.log",
+          "bytes": 380,
+          "sha256": "98869df238ca30d0bdc5a62e6a4823fc5bb350543841dbf0215b45a5ac2298de"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/static_metrics.json",
+          "bytes": 686,
+          "sha256": "e8e63407847abb238b88828abb94938d906765b8dce44d9a34612c206da4cadd"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10/visualization_summary.json",
+          "bytes": 627,
+          "sha256": "884e2bf8a59890600dec78eddadd06848f48c38151fe54d33efca779923659ba"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.10.log",
+          "bytes": 649,
+          "sha256": "8257261bde7db486ba9f1e9db64795a8ed5118e0bb40189fbf5c2c2e2c53f9ee"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/bev_xy_leveled.png",
+          "bytes": 126678,
+          "sha256": "ff0802926027fb948b190410dc0e85e74f3156e343fdf9e99797cc4ebcfc0058"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/bev_xy_raw.png",
+          "bytes": 129835,
+          "sha256": "9c2a06c9d6837b5c21493f99c583f6260fd60907f8e6696169460c314df557a8"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/map_raw.pcd",
+          "bytes": 252823,
+          "sha256": "37e3e07480caffde0f00f1d5b7a0b768343f5acaf937ecbf264cb1dea4ac216c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/mapping.log",
+          "bytes": 1049,
+          "sha256": "9bdc5a2b9166c91a0325866995d1510ae115672cb09096d8a3ddbd3ca977a207"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/odometry.csv",
+          "bytes": 48706,
+          "sha256": "2bf37480cc1d7f3f44741b08ca5330c5ba0a44adac2d9731d6b08303f2bf7d31"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/playback.log",
+          "bytes": 680,
+          "sha256": "bc1641c383031990a1981af9831f9cddc280298e79e9c72aeb1d85ee71d00529"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "446fcce70dff67b6e1fa6e3b3d5f7b2d9b1c8041074ab0ada1d6a212eb83c1dd"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/ros_logs/fastlio_mapping_29986_1790485618696.log",
+          "bytes": 438,
+          "sha256": "dcafcdc7448c27b6af826ebbd347531c1610e13789de68bc425b9bb030d29cb9"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/ros_logs/python3_29969_1790485618355.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/ros_logs/python3_30002_1790485619048.log",
+          "bytes": 380,
+          "sha256": "cb08faed9a72d3864321979cf86e8db5b47b9c4422285287b2e8c7f1aa7c3708"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/static_metrics.json",
+          "bytes": 684,
+          "sha256": "9fba394254311a52e1a395b93d2e405ff23361785b33a47db7eac57e28a379a1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15/visualization_summary.json",
+          "bytes": 626,
+          "sha256": "1eedb6bb0c2810bc9b84a094e5512a0430a8c6134256006386a55b0eec69131c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.15.log",
+          "bytes": 649,
+          "sha256": "5b7cda5c65cbb89586d3c201b4a0362c549830804a185c732edd4c82349a51ad"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/bev_xy_leveled.png",
+          "bytes": 127016,
+          "sha256": "c3da55c953aeec50dc6efd67c106349912b1a8e7f6f210b712d42eabb4e732aa"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/bev_xy_raw.png",
+          "bytes": 129850,
+          "sha256": "facddf8647cb70b5fd120c7e49cbc2643907ed882ea139d83b6cb8e8c0efd908"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/map_raw.pcd",
+          "bytes": 148439,
+          "sha256": "29f5dafe792da9a5b4eb38008d02f84a6360421fc6db99c295bc7cca6bf00969"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/mapping.log",
+          "bytes": 1049,
+          "sha256": "358c2d58812b50c8dc29aee575a08ce260b597652a721225c7c792d7ede446d4"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/odometry.csv",
+          "bytes": 48829,
+          "sha256": "2b03efc110f92c69895dcbb5bfc66eb0e2270252e0ac020bbf56deac64129428"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/playback.log",
+          "bytes": 612,
+          "sha256": "a456d0b9f0f82d2776f8da8250acdbda2299d146fa5faaf7bef8c5aca5e231d3"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "eec3ec4c34fac446f508dff95316a410f25680410b08a6f5812ea14f1cd05f64"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/ros_logs/fastlio_mapping_28231_1790485341112.log",
+          "bytes": 438,
+          "sha256": "7c93ecd70e3bc9feddc0735170cf8a66d39a80f142dfe837a5bf9bb523002977"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/ros_logs/python3_28174_1790485340303.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/ros_logs/python3_28292_1790485341960.log",
+          "bytes": 312,
+          "sha256": "fcc6f9b3524c6c73845a068a2fa1e12b9eaabf9cc0c7b510118227555d981317"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/static_metrics.json",
+          "bytes": 682,
+          "sha256": "e4efe525725e545fa183b6d6b2d17b263bba6db01fcb7f6b05a7b0910ec1c5cd"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/summary.json",
+          "bytes": 371,
+          "sha256": "7f8f201ae88897358a520d4556e6246693a05a4e8480b396b713f812b134ff06"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20/visualization_summary.json",
+          "bytes": 622,
+          "sha256": "5be1bac91dabc93419fb0f49ccaf3feae3679df9f6db5b01b8716802c3a8e61f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/surf_0.20_map_0.20.log",
+          "bytes": 649,
+          "sha256": "b683a9053b25a2b1cb7146c64e3fe28546f0a5a0e6ed12a1069a1a7d9967cd3f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/voxel_grid_20260927/trajectory_grid.png",
+          "bytes": 468644,
+          "sha256": "7832029c16aa3a1e6260481e9615ae7db22dcc0559d39ac6d77485421af2362d"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_mapping_experiment",
+      "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927",
+      "note": "旧回放实验，small_area_walk 输入保留；几何可重算，历史性能指标不能原样重现。",
+      "file_count": 17,
+      "bytes": 13364036,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/README.md",
+          "bytes": 1560,
+          "sha256": "d0acb7900b96387889be4760a37d77f3a1c9185c55e2926a5fd1a044f89f8eb0"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/bev_xy_leveled.png",
+          "bytes": 127013,
+          "sha256": "0e96884d2a3b1530ff1b8f855631efa176d0253c2b49de01f51b45c88a987189"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/bev_xy_raw.png",
+          "bytes": 128756,
+          "sha256": "400033015ef9e2825acb995c954b114a36051ae82b2bf49406584114d577d3da"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/comparison.json",
+          "bytes": 753,
+          "sha256": "63b3f31e59132c19f9a2629104aedc87ba9808722235523888265fc9627dc964"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/map_raw.pcd",
+          "bytes": 543961,
+          "sha256": "fc869a107415d1cb6fa43a2c702a94c54ae3be368a64b8cb06ec85bdc6a16edd"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/mapping.log",
+          "bytes": 1031,
+          "sha256": "de9dd04f7d8496f599424e9524c727d56fa995e1aea9529ed1a11e4987281c9c"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/odometry.csv",
+          "bytes": 48779,
+          "sha256": "f3226fe40c52ae7e13a77e30b61687100a1314937d430827c0994345036eadb2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/output_timing.csv",
+          "bytes": 31296,
+          "sha256": "adaffdb9ed24813ad7a43093994f6b70b83ffb3188fd5028599cb672bd391c59"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/playback.log",
+          "bytes": 677,
+          "sha256": "b57b953df5ecb0aa2e3db543e8734c433e89afe6f76de81ff41aa371b613b634"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "24fc4db5ab891ad3a28f9e64b89fdb1ae17b5fc699620eedad2175ca71a056e1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/ros_logs/fastlio_mapping_42659_1790489083864.log",
+          "bytes": 420,
+          "sha256": "4b49a78dff24464c06c97ef0f03c555b318933bda3f8f80b0ac38393e8f0da84"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/ros_logs/python3_42589_1790489083177.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/ros_logs/python3_42681_1790489084477.log",
+          "bytes": 377,
+          "sha256": "716bfbddd5a3df1406d5aff5a0c8916e61dde41484e3019b353a28322e5cd784"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/summary.json",
+          "bytes": 488,
+          "sha256": "6d0aaffa171c07fdbdc5ecb8f04af161103a415adbf27e5582d16efb2ffe1a46"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel010_20260927/visualization_summary.json",
+          "bytes": 624,
+          "sha256": "8fdba699fa1c91079a3525ac4b6257cbf01a9bc4e29b9c51ff74b32979ac6998"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_mapping_experiment",
+      "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927",
+      "note": "旧回放实验，small_area_walk 输入和 fastlio/config/experiments/g1_mid360_voxel_005.yaml 保留；几何可重算，历史性能指标不能原样重现。",
+      "file_count": 17,
+      "bytes": 14628339,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/README.md",
+          "bytes": 1626,
+          "sha256": "d832faf8d6c696048300faa14a1e830d112fe8cda41b7406e7f4db48b2d84acc"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/T_level_from_camera_init.txt",
+          "bytes": 404,
+          "sha256": "658038b5734184a2f1756da21e732f5de325ba97c6059fd22beac0153c1a37ae"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/bev_xy_leveled.png",
+          "bytes": 127351,
+          "sha256": "af9055be148e8ccb2e472842ce2ff98cba52dbf2276611ac422f414b39ac2125"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/bev_xy_raw.png",
+          "bytes": 129066,
+          "sha256": "f96e1afbd1d723b9523354042d833af5e55b7644f4713b9c820506ae1248d976"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/comparison.json",
+          "bytes": 780,
+          "sha256": "8fb28e11e6b93ede9f5e1b19bf81d23a5d375e3a14c8c4670c6f5cf6c2cadff6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/map_raw.pcd",
+          "bytes": 1807545,
+          "sha256": "92bb7c5d38d762907e76138cb7ed16f17960f98f9aa73d44e38cf833ba1bb142"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/mapping.log",
+          "bytes": 1040,
+          "sha256": "a786d686efde4817bb1cf701c94f5a3959b93028683370488709d6fbbad46c1e"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/odometry.csv",
+          "bytes": 48768,
+          "sha256": "8f27975ebbb7cfa41d191f1391b3db8a05078b34b389254bcb00b66685ed7759"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/output_timing.csv",
+          "bytes": 31264,
+          "sha256": "b4165662893ecdddecd9cefcb6458a49f2245ef773dc847f1d0dbfcea23ce25a"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/playback.log",
+          "bytes": 677,
+          "sha256": "b4302f216372301dd312896045074b9d98e8635bba4d923810f01a30a638a979"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "6a0677c711f23812635611f7827a97da6d6bbfc29adf9dd4a190b8d2c6410293"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/ros_logs/fastlio_mapping_43792_1790489283893.log",
+          "bytes": 429,
+          "sha256": "2d7577b19f5b30f2f8e42246866159b6704bbf2efce1fdce3b9cb0d2b5517ac5"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/ros_logs/python3_43711_1790489283196.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/ros_logs/python3_43812_1790489284489.log",
+          "bytes": 377,
+          "sha256": "ce7921ebff4eda4a39bbb4a3ef864295085701059ec9bee8e637cb83c6df2dd6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/summary.json",
+          "bytes": 489,
+          "sha256": "9e7fb993a6837b7bdeacf37a11007dc0ec26727227d26e652e37bc674af4b3b2"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/realtime_1x_voxel005_20260927/visualization_summary.json",
+          "bytes": 626,
+          "sha256": "2861fb651edf8b654810e375cacba58081e80e0bd1d134133cb7c03db678209b"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "optional_deployment_history",
+      "path": "RealWorldG1/diagnostics/g1_deployment_20260927",
+      "note": "不属于正式静态地图依赖。包含现场 live_010、production_check 及机载性能证据，不能仅凭现有地图重建；建议此次暂留，若不再需要历史证据才整目录删除。",
+      "file_count": 32,
+      "bytes": 14810609,
+      "files": [
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/REPORT.md",
+          "bytes": 3179,
+          "sha256": "afda6a12267cbc5bee7ae3ed1129786ac81b851ea37b4f636cd50678183019ac"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/build.log",
+          "bytes": 2260,
+          "sha256": "7b26e09ad1d65f333a32ff5e5b4f5f79e5ae4a2889d9d3d6292b1bfaef64ff74"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/compute_summary.json",
+          "bytes": 267,
+          "sha256": "c8c440846cfc04f671f0a54caa82de89aa96a0dcf0b7c7a9c290097bd19881a1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/compute_timing.csv",
+          "bytes": 90421,
+          "sha256": "61519bdc60ff771ca0f8ec9755c65df26481e78dabbf4d9c274e4494854f9e8f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/config.yaml",
+          "bytes": 1118,
+          "sha256": "03a85bad8e97f701099f624ce4a1ab2d49af8af27494c84cd4418e10e904df87"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/mapping.log",
+          "bytes": 182109,
+          "sha256": "f40e294a1d0dfc39766fa62c7f88ea41e3623563599bcead1f2fc50115030d15"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/monitor/cloud.csv",
+          "bytes": 50709,
+          "sha256": "2afe9d5ba3f8f8aad47a4c93f446ce6264be7b798c8a2ba030456596c0fb1cda"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/monitor/imu.csv",
+          "bytes": 1016049,
+          "sha256": "a732ca7ffe10751050f807c0378a394fdc9337d59a128d361361434d6d3b1c01"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/monitor/odom.csv",
+          "bytes": 110797,
+          "sha256": "0cd2c934966d72c29d4f70f0dd5d49df3027273544900c94dbf93c0e0c069ae1"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/monitor/summary.json",
+          "bytes": 1545,
+          "sha256": "04aaa2bc0c884ea9150a17f7808e569c88de55bc06dae5e294c780169208f8cb"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/monitor.log",
+          "bytes": 1546,
+          "sha256": "ced8d43050a065607e4ad00c5cf4122d3d31adb89a52ee2a48b1befb33e64f40"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/process.json",
+          "bytes": 220,
+          "sha256": "5301f54764c5562563f33ff74b5d9b7e5f6f80dfd5318e3c3a4f423f05b19b28"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/ros_logs/fastlio_mapping_1170_1790500688142.log",
+          "bytes": 281,
+          "sha256": "7bb6c0aa4ccac4a410a4ae043ff5a89b3a4d705fcc16d3c6e7fea50c8a1df4e7"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/live_010/ros_logs/python3_1181_1790500691217.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/production_check/cloud.csv",
+          "bytes": 6817,
+          "sha256": "4b17339ea139ff4a82b26c07c1e7cbf5662b10ca0f002f861d9b9912284960da"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/production_check/imu.csv",
+          "bytes": 135916,
+          "sha256": "0921671d53db5d2ea9e8ae68acb19b2235ec93076c0e80e1486534cab80d2644"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/production_check/odom.csv",
+          "bytes": 13994,
+          "sha256": "d2780711d3d88b8ca1bdc81d4e8da1ae4e14d61712d3ba5b2be97a905ae0f414"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/production_check/summary.json",
+          "bytes": 1547,
+          "sha256": "6908bcedd145cbf7066e04a159d4f7a2debfb06b0c759049ea14c344bd17ac12"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/comparison.json",
+          "bytes": 778,
+          "sha256": "46568309689b2b10aee306a4a66b02adbbad86f3c65b201d1c7b46e39d41642f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/compute_summary.json",
+          "bytes": 170,
+          "sha256": "b234fb5dc33ba14775835c8a5680b615407c5220e8412c24187d885199940531"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/compute_timing.csv",
+          "bytes": 29074,
+          "sha256": "ca1578e87643d6b09dd23d768f861ee737a599f84a58f0c9f5a5d44783228e95"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/localization.csv",
+          "bytes": 25,
+          "sha256": "460743b6d2e33ce07c2b0cf3636f36ea39986dff9b6a5a2e9398b1ddf93b9b11"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/map_raw.pcd",
+          "bytes": 543801,
+          "sha256": "49adfbf4ce0335b5e149891aeab10d67b524a9ba3954fe592bbfb95740f70930"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/mapping.log",
+          "bytes": 58733,
+          "sha256": "892076184882fa8ff5cb0854d1f3690ed7ca7a2fb1d0a1d225dac569988202f6"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/odometry.csv",
+          "bytes": 48713,
+          "sha256": "ca3f23d6c632fcb8b2bc4d284f0eab1d617665903c8c39d5bd59266536db1c00"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/output_timing.csv",
+          "bytes": 31109,
+          "sha256": "d767fcbc7709f7c2d25a7958443b2dd570a4e9a3293e62259e71d4899804fa5f"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/playback.log",
+          "bytes": 405,
+          "sha256": "e79ca555b5776cbb0378fe263139af661b8da3f3b59d16f8e30d030b8dec4aaf"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/registered_xyz.npy",
+          "bytes": 12477872,
+          "sha256": "b129c73b33e706dda9a4d16f81a0b403225f76a1076b3f171d148771254c6491"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/ros_logs/fastlio_mapping_1283_1790500832241.log",
+          "bytes": 382,
+          "sha256": "6d076f3ca260ffef96fea2d25fe622636311ebfa868578bee25037cd65a43ace"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/ros_logs/python3_1271_1790500831853.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/ros_logs/python3_1295_1790500832745.log",
+          "bytes": 346,
+          "sha256": "5c2fb65e5dbd535feae70aecc987ebf49f427ffde5e0400294be6d902f4d6053"
+        },
+        {
+          "path": "RealWorldG1/diagnostics/g1_deployment_20260927/replay_010_1x/summary.json",
+          "bytes": 426,
+          "sha256": "f6add6e75efad2c8851dd8e9566388875e1f90181cd71212b13928abd84ca5f3"
+        }
+      ],
+      "status": "retained"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/source",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 3,
+      "bytes": 50346261,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/source/T_level_from_camera_init.txt",
+          "bytes": 406,
+          "sha256": "3ee5fa8a4ed09424ecb4ea0605a1479505cac95508642c2c462bf8117615a819"
+        },
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/source/odometry.csv",
+          "bytes": 172731,
+          "sha256": "557be8676da7bf6704e08819b5c76edd4472e95b7a5072edb69764b5d89fbc14"
+        },
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/source/registered_xyz.npy",
+          "bytes": 50173124,
+          "sha256": "4bd6b24685a76aa6c8243d9382f20c7a266ab8fd22edb58af30fc08f4ae141c1"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/bev_preview.png",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 1,
+      "bytes": 122575,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/bev_preview.png",
+          "bytes": 122575,
+          "sha256": "e7c84c83748500d710b5bc84e3682b57bf5806a4d0bf1a79a229bd1445ab6c5b"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/dense_reference_preview.png",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 1,
+      "bytes": 210742,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/dense_reference_preview.png",
+          "bytes": 210742,
+          "sha256": "8ecf896a9301a1bd721bcc2eabb0e008ce26f240c1758a6bf8018235a6c92988"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/floor_check.png",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 1,
+      "bytes": 617715,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/floor_check.png",
+          "bytes": 617715,
+          "sha256": "2864ab73062067ffe035eb5cdc60bd1bc6e031736e882cda9a718d48570ae430"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/trajectory_preview.png",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 1,
+      "bytes": 191085,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/trajectory_preview.png",
+          "bytes": 191085,
+          "sha256": "6aa63f7ea893d06a167065126287e93b4c291a7c35e8d941c1ea0035d331b52a"
+        }
+      ],
+      "status": "deleted"
+    },
+    {
+      "category": "old_map_derived",
+      "path": "RealWorldG1/maps/full_lab_v1/trajectory_map.csv",
+      "note": "不属于正式运行包。source 中累计点云和轨迹需要原 bag 回放；旧轨迹和地面检查预览需要回放/重新拟合；不保证逐字节一致。三维正式地图与原始 bag 均保留。",
+      "file_count": 1,
+      "bytes": 218015,
+      "files": [
+        {
+          "path": "RealWorldG1/maps/full_lab_v1/trajectory_map.csv",
+          "bytes": 218015,
+          "sha256": "46fc43830a6e83d8ba2d0fdf284a613c01200e74d9a8f0a7da9d5f0f81d2f089"
+        }
+      ],
+      "status": "deleted"
+    }
+  ],
+  "deleted_files": 261,
+  "deleted_bytes": 252960346
+}

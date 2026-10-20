@@ -1,0 +1,26 @@
+[
+  {
+    "run": "baseline",
+    "frames": 26,
+    "end_distance_from_initial_origin_m": 0.6316874095092058,
+    "max_distance_from_initial_origin_m": 0.6316874095092058
+  },
+  {
+    "run": "cube1000",
+    "frames": 26,
+    "end_distance_from_initial_origin_m": 0.12768699219346105,
+    "max_distance_from_initial_origin_m": 0.13843397455631684
+  },
+  {
+    "run": "fine",
+    "frames": 26,
+    "end_distance_from_initial_origin_m": 0.007421880923887041,
+    "max_distance_from_initial_origin_m": 0.010847724286696898
+  },
+  {
+    "run": "predict_only",
+    "frames": 26,
+    "end_distance_from_initial_origin_m": 0.046156953445077566,
+    "max_distance_from_initial_origin_m": 0.046156953445077566
+  }
+]

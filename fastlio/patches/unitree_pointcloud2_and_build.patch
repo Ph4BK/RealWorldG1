@@ -1,0 +1,310 @@
+diff --git a/FAST_LIO/CMakeLists.txt b/FAST_LIO/CMakeLists.txt
+index e10989a..400e3da 100644
+--- a/FAST_LIO/CMakeLists.txt
++++ b/FAST_LIO/CMakeLists.txt
+@@ -60,7 +60,11 @@ find_package(visualization_msgs REQUIRED)
+ find_package(pcl_ros REQUIRED)
+ find_package(pcl_conversions REQUIRED)
+ 
+-find_package(livox_ros_driver2 REQUIRED)
++option(WITH_LIVOX_CUSTOM_MSG "Build Livox driver CustomMsg input" ON)
++if(WITH_LIVOX_CUSTOM_MSG)
++  find_package(livox_ros_driver2 REQUIRED)
++  add_compile_definitions(WITH_LIVOX_CUSTOM_MSG)
++endif()
+ 
+ # find_package(livox_ros2_driver REQUIRED)
+ # find_package(livox_interfaces REQUIRED)
+@@ -78,12 +82,15 @@ set(dependencies
+   pcl_ros
+   pcl_conversions
+ 
+-  livox_ros_driver2
+ 
+   # livox_ros2_driver
+   # livox_interfaces
+ )
+ 
++if(WITH_LIVOX_CUSTOM_MSG)
++  list(APPEND dependencies livox_ros_driver2)
++endif()
++
+ # Thirdparty libraries
+ find_package(Eigen3 REQUIRED)
+ find_package(PCL REQUIRED COMPONENTS common io)
+diff --git a/FAST_LIO/src/laserMapping.cpp b/FAST_LIO/src/laserMapping.cpp
+index 648d37d..6c8f709 100644
+--- a/FAST_LIO/src/laserMapping.cpp
++++ b/FAST_LIO/src/laserMapping.cpp
+@@ -59,7 +59,9 @@
+ #include <tf2_ros/transform_broadcaster.h>
+ #include <geometry_msgs/msg/transform_stamped.hpp>
+ #include <geometry_msgs/msg/vector3.hpp>
++#ifdef WITH_LIVOX_CUSTOM_MSG
+ #include <livox_ros_driver2/msg/custom_msg.hpp>
++#endif
+ // #include <livox_interfaces/msg/custom_msg.hpp>
+ #include "preprocess.h"
+ #include <ikd-Tree/ikd_Tree.h>
+@@ -318,6 +320,7 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::UniquePtr msg)
+ 
+ double timediff_lidar_wrt_imu = 0.0;
+ bool timediff_set_flg = false;
++#ifdef WITH_LIVOX_CUSTOM_MSG
+ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::UniquePtr msg)
+ // void livox_pcl_cbk(const livox_interfaces::msg::CustomMsg::UniquePtr msg)
+ {
+@@ -358,8 +361,13 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::UniquePtr msg)
+     sig_buffer.notify_all();
+ }
+ 
++#endif
++
+ void imu_cbk(const sensor_msgs::msg::Imu::UniquePtr msg_in)
+ {
++    static size_t imu_received = 0;
++    ++imu_received;
++    if (imu_received % 1000 == 0) std::cout << "IMU received: " << imu_received << std::endl;
+     publish_count++;
+     // cout<<"IMU got at: "<<msg_in->header.stamp.toSec()<<endl;
+     sensor_msgs::msg::Imu::SharedPtr msg(new sensor_msgs::msg::Imu(*msg_in));
+@@ -624,7 +632,14 @@ void publish_map(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub
+ void save_to_pcd()
+ {
+     pcl::PCDWriter pcd_writer;
+-    pcd_writer.writeBinary(map_file_path, *pcl_wait_pub);
++    PointVector points;
++    ikdtree.flatten(ikdtree.Root_Node, points, NOT_RECORD);
++    if (points.empty()) throw std::runtime_error("Cannot save empty FAST-LIO map");
++    PointCloudXYZI map;
++    map.points = std::move(points);
++    map.width = map.size(); map.height = 1;
++    if (pcd_writer.writeBinary(map_file_path, map) != 0)
++        throw std::runtime_error("PCD write failed");
+ }
+ 
+ template <typename T>
+@@ -937,14 +952,18 @@ public:
+         /*** ROS subscribe initialization ***/
+         if (p_pre->lidar_type == AVIA)
+         {
++#ifdef WITH_LIVOX_CUSTOM_MSG
+             sub_pcl_livox_ = this->create_subscription<livox_ros_driver2::msg::CustomMsg>(lid_topic, 20, livox_pcl_cbk);
++#else
++            throw std::runtime_error("CustomMsg support disabled; use PointCloud2 lidar_type=5");
++#endif
+             // sub_pcl_livox_ = this->create_subscription<livox_interfaces::msg::CustomMsg>(lid_topic, 20, livox_pcl_cbk);
+         }
+         else
+         {
+             sub_pcl_pc_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, rclcpp::SensorDataQoS(), standard_pcl_cbk);
+         }
+-        sub_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, imu_cbk);
++        sub_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, rclcpp::QoS(1000).best_effort(), imu_cbk);
+         pubLaserCloudFull_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_1", 20);
+         pubLaserCloudFull_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body_1", 20);
+         pubLaserCloudEffect_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_effected_1", 20);
+@@ -1159,7 +1178,9 @@ private:
+     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPath_;
+     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
+     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc_;
++#ifdef WITH_LIVOX_CUSTOM_MSG
+     rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_pcl_livox_;
++#endif
+     // rclcpp::Subscription<livox_interfaces::msg::CustomMsg>::SharedPtr sub_pcl_livox_;
+ 
+     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+diff --git a/FAST_LIO/src/preprocess.cpp b/FAST_LIO/src/preprocess.cpp
+index 80c4dc1..82816db 100644
+--- a/FAST_LIO/src/preprocess.cpp
++++ b/FAST_LIO/src/preprocess.cpp
+@@ -44,6 +44,7 @@ void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num)
+   point_filter_num = pfilt_num;
+ }
+ 
++#ifdef WITH_LIVOX_CUSTOM_MSG
+ void Preprocess::process(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out)
+ // void Preprocess::process(const livox_interfaces::msg::CustomMsg::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out)
+ {
+@@ -51,6 +52,8 @@ void Preprocess::process(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg
+   *pcl_out = pl_surf;
+ }
+ 
++#endif
++
+ void Preprocess::process(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out)
+ {
+   switch (time_unit)
+@@ -82,6 +85,10 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, Po
+     velodyne_handler(msg);
+     break;
+ 
++  case UNITREE_MID360:
++    unitree_mid360_handler(msg);
++    break;
++
+   case MID360:
+     mid360_handler(msg);
+     break;
+@@ -93,6 +100,7 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, Po
+   *pcl_out = pl_surf;
+ }
+ 
++#ifdef WITH_LIVOX_CUSTOM_MSG
+ void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg)
+ // void Preprocess::avia_handler(const livox_interfaces::msg::CustomMsg::UniquePtr &msg)
+ {
+@@ -192,6 +200,8 @@ void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::UniquePtr
+   }
+ }
+ 
++#endif
++
+ void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg)
+ {
+   pl_surf.clear();
+@@ -472,6 +482,38 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::UniquePtr
+   }
+ }
+ 
++
++// Unitree PointCloud2: x/y/z/intensity float32, ring uint16, time float32.
++// time is offset from the message header; timestamp_unit controls units.
++void Preprocess::unitree_mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg)
++{
++  for (const auto &name : {"x", "y", "z", "intensity", "ring", "time"}) {
++    const auto it = std::find_if(msg->fields.begin(), msg->fields.end(),
++      [&](const auto &f) { return f.name == name; });
++    const auto expected = std::string(name) == "ring" ? sensor_msgs::msg::PointField::UINT16 : sensor_msgs::msg::PointField::FLOAT32;
++    if (it == msg->fields.end() || it->datatype != expected || it->count != 1)
++      throw std::runtime_error(std::string("Invalid Unitree PointCloud2 field: ") + name);
++  }
++  pcl::PointCloud<velodyne_ros::Point> cloud;
++  pcl::fromROSMsg(*msg, cloud);
++  pl_surf.clear(); pl_corn.clear(); pl_full.clear();
++  pl_surf.reserve(cloud.size());
++  given_offset_time = true;
++  const int stride = std::max(1, point_filter_num);
++  for (size_t i = 0; i < cloud.size(); i += stride) {
++    const auto &p = cloud[i];
++    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
++        !std::isfinite(p.time) || p.time < 0 || p.ring >= N_SCANS) continue;
++    if (p.x*p.x + p.y*p.y + p.z*p.z <= blind*blind) continue;
++    PointType q;
++    q.x=p.x; q.y=p.y; q.z=p.z; q.intensity=p.intensity;
++    q.normal_x=q.normal_y=q.normal_z=0;
++    q.curvature=p.time*time_unit_scale; // FAST-LIO stores offsets in milliseconds.
++    pl_surf.push_back(q);
++  }
++  std::sort(pl_surf.begin(), pl_surf.end(), [](const auto &a, const auto &b) { return a.curvature < b.curvature; });
++}
++
+ void Preprocess::mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg)
+ {
+   pl_surf.clear();
+diff --git a/FAST_LIO/src/preprocess.h b/FAST_LIO/src/preprocess.h
+index 1a3df3a..de64f65 100644
+--- a/FAST_LIO/src/preprocess.h
++++ b/FAST_LIO/src/preprocess.h
+@@ -2,7 +2,9 @@
+ #include <rclcpp/rclcpp.hpp>
+ #include <pcl_conversions/pcl_conversions.h>
+ #include <sensor_msgs/msg/point_cloud2.hpp>
++#ifdef WITH_LIVOX_CUSTOM_MSG
+ #include <livox_ros_driver2/msg/custom_msg.hpp>
++#endif
+ // #include <livox_interfaces/msg/custom_msg.hpp>
+ 
+ using namespace std;
+@@ -17,7 +19,8 @@ enum LID_TYPE
+   AVIA = 1,
+   VELO16,
+   OUST64,
+-  MID360
++  MID360,
++  UNITREE_MID360 = 5
+ }; //{1, 2, 3}
+ enum TIME_UNIT
+ {
+@@ -159,7 +162,9 @@ class Preprocess
+   Preprocess();
+   ~Preprocess();
+   
++#ifdef WITH_LIVOX_CUSTOM_MSG
+   void process(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out);
++#endif
+   // void process(const livox_interfaces::msg::CustomMsg::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out);
+   void process(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out);
+   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
+@@ -175,10 +180,13 @@ class Preprocess
+   // ros::Publisher pub_full, pub_surf, pub_corn;
+ 
+ private:
++#ifdef WITH_LIVOX_CUSTOM_MSG
+   void avia_handler(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg);
++#endif
+   // void avia_handler(const livox_interfaces::msg::CustomMsg::UniquePtr &msg);
+   void oust64_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
+   void velodyne_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
++  void unitree_mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
+   void mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
+   void default_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
+   void give_feature(PointCloudXYZI &pl, vector<orgtype> &types);
+diff --git a/open3d_loc/CMakeLists.txt b/open3d_loc/CMakeLists.txt
+index 119f45d..7ba30e3 100644
+--- a/open3d_loc/CMakeLists.txt
++++ b/open3d_loc/CMakeLists.txt
+@@ -3,7 +3,7 @@ project(open3d_loc)
+ 
+ # Default to C++14
+ if(NOT CMAKE_CXX_STANDARD)
+-        set(CMAKE_CXX_STANDARD 14)
++        set(CMAKE_CXX_STANDARD 17)
+ endif()
+ 
+ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+@@ -39,7 +39,7 @@ find_package(OpenCV REQUIRED)
+ find_package(Boost REQUIRED COMPONENTS filesystem system)
+ 
+ # Set Open3D path - modify this to your installation path
+-set(Open3D_DIR "/home/sax/open3d141/lib/cmake/Open3D")
++# Open3D_DIR is supplied by the build, not hardcoded to a developer machine.
+ 
+ # set(Open3D_DIR "/home/unitree/open3d141_arm/open3d141/lib/cmake/Open3D")
+ find_package(Open3D REQUIRED)
+@@ -126,6 +126,8 @@ target_link_libraries(global_localization_node
+         ${Open3D_LIBRARIES}
+         open3d_registration
+         open3d_conversions
++        c++
++        c++abi
+ )
+ ament_target_dependencies(global_localization_node
+         rclcpp
+diff --git a/open3d_loc/src/open3d_registration/open3d_registration.cpp b/open3d_loc/src/open3d_registration/open3d_registration.cpp
+index 2abcc8c..c41f294 100644
+--- a/open3d_loc/src/open3d_registration/open3d_registration.cpp
++++ b/open3d_loc/src/open3d_registration/open3d_registration.cpp
+@@ -1,4 +1,5 @@
+ #include "open3d_registration/open3d_registration.h"
++#include <open3d/utility/Random.h>
+ 
+ namespace pcd_tools
+ {
+@@ -13,6 +14,7 @@ namespace pcd_tools
+         bool mutual_filter)
+     {
+ 
++        if (seed_) open3d::utility::random::Seed(static_cast<int>(*seed_));
+         float distance_threshold = 1.5 * voxel_size;
+ 
+         // Prepare checkers
+@@ -37,7 +39,7 @@ namespace pcd_tools
+                 open3d::pipelines::registration::
+                     TransformationEstimationPointToPoint(false),
+                 4 /*最小3*/, correspondence_checker,
+-                open3d::pipelines::registration::RANSACConvergenceCriteria(1000000, 0.999), seed_);
++                open3d::pipelines::registration::RANSACConvergenceCriteria(1000000, 0.999));
+         return registration_result;
+     }
+ 

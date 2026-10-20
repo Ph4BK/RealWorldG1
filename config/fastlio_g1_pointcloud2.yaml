@@ -1,0 +1,49 @@
+# Input schema verified against lidar_imu_20260922_210955_HmoGnjbo.
+# Mapping has NOT yet been run with this config.
+/**:
+  ros__parameters:
+    use_sim_time: true
+    feature_extract_enable: false
+    point_filter_num: 3
+    max_iteration: 3
+    filter_size_surf: 0.5
+    filter_size_map: 0.5
+    cube_side_length: 1000.0
+    runtime_pos_log_enable: false
+    map_file_path: "./g1_map.pcd"
+    common:
+      lid_topic: "/utlidar/cloud_livox_mid360"
+      imu_topic: "/utlidar/imu_livox_mid360"
+      time_sync_en: false
+      time_offset_lidar_to_imu: 0.0
+    preprocess:
+      # Select by FIELD LAYOUT, not sensor brand. This upstream handler accepts
+      # float32 x/y/z/intensity/time + uint16 ring and preserves per-point time.
+      # type=4 uses line/tag and estimates time from azimuth; do not use here.
+      lidar_type: 2
+      scan_line: 4
+      timestamp_unit: 3 # ns -> FAST-LIO internal ms (factor 1e-6)
+      scan_rate: 10
+      blind: 0.3
+    mapping:
+      acc_cov: 0.1
+      gyr_cov: 0.1
+      b_acc_cov: 0.0001
+      b_gyr_cov: 0.0001
+      fov_degree: 360.0
+      det_range: 100.0
+      # Fix the user-specified nominal extrinsic for the first baseline run.
+      extrinsic_est_en: false
+      # FAST-LIO convention: p_imu = R * p_lidar + T.
+      extrinsic_T: [-0.011, -0.02329, 0.04412]
+      extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    publish:
+      path_en: true
+      effect_map_en: false
+      map_en: true
+      scan_publish_en: true
+      dense_publish_en: false
+      scan_bodyframe_pub_en: true
+    pcd_save:
+      pcd_save_en: true
+      interval: -1

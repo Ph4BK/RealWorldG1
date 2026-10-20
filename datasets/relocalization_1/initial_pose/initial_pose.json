@@ -1,0 +1,59 @@
+{
+  "x": 5.899999618530273,
+  "y": -1.8307693004608154,
+  "yaw_deg": -178.07482318112739,
+  "z": 1.2613043155701442,
+  "initial_transform_euler_XYZ_deg": [
+    178.5801441180386,
+    4.602663664417811,
+    178.1942776093457
+  ],
+  "initial_transform_euler_convention": "R = Rx(roll) @ Ry(pitch) @ Rz(yaw); differs from planar heading",
+  "T_map_from_camera_init": [
+    [
+      -0.9962801686012532,
+      -0.031408967256831316,
+      0.08024526420741446,
+      5.899999618530273
+    ],
+    [
+      -0.033488289096951104,
+      0.9991338788684827,
+      -0.024698716375137788,
+      -1.8307693004608154
+    ],
+    [
+      -0.07940000091446772,
+      -0.02729411792089592,
+      -0.9964691018700493,
+      1.2613043155701442
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quaternion_xyzw": [
+    -0.016240800475296583,
+    0.9989848784315738,
+    -0.013011416743780821,
+    0.039951872287728826
+  ],
+  "imu": {
+    "samples": 401,
+    "seconds": 2.0,
+    "mean_acceleration": [
+      -0.07958170806900819,
+      -0.02735658059653796,
+      -0.9987495245778947
+    ],
+    "relative_acc_std": 0.00908045195361526,
+    "gyro95_rad_s": 0.02177772550841543,
+    "forward_axis": "IMU +X projected horizontally",
+    "assumption": "initial IMU/body orientation is FAST-LIO camera_init; click denotes startup pose"
+  },
+  "bag": "/home/tim/UniGoal/RealWorldG1/datasets/relocalization_1/bag",
+  "map": "/home/tim/UniGoal/RealWorldG1/maps/full_lab_v1"
+}
