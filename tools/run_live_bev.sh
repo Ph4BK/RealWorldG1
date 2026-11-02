@@ -7,6 +7,11 @@ flock -n 9 || { echo 'Another initial-pose UI is running; close it first.'; exit
 source "/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash"
 source "$ROOT/.cache/fastlio_ws/install/setup.bash"
 source "$ROOT/.cache/rviz_panel_ws/install/setup.bash"
+if [[ ! -f "$ROOT/.cache/nav_interfaces_ws/install/setup.bash" ]]; then
+  echo 'Build Action interfaces first: bash posnav/deploy/build_nav_interfaces.sh' >&2
+  exit 1
+fi
+source "$ROOT/.cache/nav_interfaces_ws/install/setup.bash"
 export LD_LIBRARY_PATH="$ROOT/.cache/open3d/lib:${LD_LIBRARY_PATH:-}"
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
 unset ROS_LOCALHOST_ONLY

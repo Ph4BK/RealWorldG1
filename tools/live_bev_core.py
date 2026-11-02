@@ -43,7 +43,7 @@ def initial_map_from_odom(x, y, yaw, z, imu_samples, odom_pose):
 class RollingBEV:
     def __init__(self, static, origin, res, window=10, min_points=2,
                  z_min=.05, z_max=1.3, radius=2.,
-                 max_window_age=2.):
+                 max_window_age=2., inner_radius=.3):
         self.static = np.asarray(static, dtype=bool).copy()
         self.origin = np.asarray(origin, dtype=float)
         self.res = float(res)
@@ -54,6 +54,9 @@ class RollingBEV:
         self.radius = float(radius)
         if not np.isfinite(self.radius) or self.radius <= 0:
             raise ValueError('Update radius must be finite and positive')
+        self.inner_radius = float(inner_radius)
+        if not np.isfinite(self.inner_radius) or not 0 <= self.inner_radius < self.radius:
+            raise ValueError('Inner radius must be finite, nonnegative and smaller than update radius')
         self.max_window_age = max_window_age
         rows, cols = np.indices(self.static.shape)
         self.x = self.origin[0] + (cols + .5) * self.res
@@ -78,7 +81,13 @@ class RollingBEV:
     def region(self, x, y):
         dx, dy = self.x - x, self.y - y
         radius = np.hypot(dx, dy)
-        return radius <= self.radius
+        return (radius >= self.inner_radius) & (radius <= self.radius)
+
+    def clear_initial_region(self, x, y):
+        """One-time session initialization, invoked by the first valid pose output."""
+        if not np.isfinite([x, y]).all():
+            raise ValueError('Initial clearing position must be finite')
+        self.task[np.hypot(self.x - x, self.y - y) <= self.inner_radius] = False
 
     def add(self, stamp, points_map, pose_xy_yaw):
         """Return True only after a new, nonempty, valid frame commits a fusion."""

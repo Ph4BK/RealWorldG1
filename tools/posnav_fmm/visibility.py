@@ -55,15 +55,13 @@ def line_is_collision_free(start, end, traversible):
 
 
 def get_stg(path, traversible):
-    """Select the furthest visible rollout STG, with path[1] as baseline fallback."""
+    """Select the furthest visible rollout STG, checking even path[1]."""
     if len(path) < 2:
         return None
 
-    candidate = len(path) - 1
-    while candidate > 1:
+    for candidate in range(len(path)-1, 0, -1):
         if line_is_collision_free(path[0], path[candidate], traversible):
-            break
-        candidate -= 1
-    return path[candidate]
+            return path[candidate]
+    return None
 
 

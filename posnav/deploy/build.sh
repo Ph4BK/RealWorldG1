@@ -4,6 +4,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 source "$ROOT/posnav/deploy/env.sh"
 export PATH="/opt/ros/humble/bin:/usr/bin:/bin"
 export CMAKE_BUILD_PARALLEL_LEVEL=2
+bash "$ROOT/posnav/deploy/build_nav_interfaces.sh"
 colcon --log-base "$ROOT/.cache/fastlio_ws/log" build \
   --base-paths "$ROOT/posnav/source/open3d_loc" \
   --build-base "$ROOT/.cache/fastlio_ws/build" \

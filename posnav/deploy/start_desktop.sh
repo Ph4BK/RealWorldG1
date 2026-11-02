@@ -7,4 +7,4 @@ source "$ROOT/posnav/deploy/env.sh"
 source "$ROOT/.cache/fastlio_ws/install/setup.bash"
 source "$ROOT/.cache/rviz_panel_ws/install/setup.bash"
 export QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 QT_X11_NO_MITSHM=1
-exec /usr/bin/python3 "$ROOT/tools/g1_live_desktop.py"
+exec /usr/bin/python3 "$ROOT/tools/g1_live_desktop.py" "$@"

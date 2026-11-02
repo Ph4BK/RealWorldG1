@@ -171,4 +171,4 @@ PC2 原生 ARM64 编译与 90 秒实时测试、一倍速录制运动数据回�
 
 G1 实时、回放及本地运行配置中的 `preprocess.blind` 统一调整为 **0.3 m**，表示以雷达原点计算的三维距离阈值。机载实时入口读取 `/work/deploy/g1_live.yaml`，对应宿主机 `/home/unitree/g1_fastlio_20260927/deploy/g1_live.yaml`。FAST-LIO 在启动时读取该值，配置修改后需重启进程，再重新初始化地图定位。
 
-该设置与 BEV 的 2 m 圆形覆盖范围是两个独立参数。历史实验记录、正式地图的 `provenance/mapping_config.yaml` 和上游配置保留原值，用于复现当时的结果；已有静态地图不重新生成。
+该设置与 BEV 的 0.3～2 m 圆环更新范围是两个独立参数。历史实验记录、正式地图的 `provenance/mapping_config.yaml` 和上游配置保留原值，用于复现当时的结果；已有静态地图不重新生成。

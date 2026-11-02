@@ -1,0 +1,2 @@
+# Preserve vendored bytes so hashes in posnav/bridge/UPSTREAM.json stay valid.
+posnav/bridge/*.py -text whitespace=cr-at-eol

@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/StarCo-Lewis/scene-graph-go2-pipeline",
+  "commit": "8097d5f076dd5d3b87756d3716ebeca836f13e5c",
+  "files": {
+    "go/tcp_bridge.py": "9ffcbb9e4c19412cc5c500fe8fee51c4618aa1eb5ca2f0957fc3727467b89afc",
+    "go/tcp_protocol.py": "172f46f2f3ea916e3161c88ea6b2be33a4b1087a325d4d3811d7e494854c234c"
+  }
+}

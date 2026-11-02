@@ -6,7 +6,7 @@
 
 ## 日常启动
 
-**实验开始前必须卸下 G1 雷达前的挡板。** 更新范围固定为以机体 IMU 平面位置为圆心、半径 2 m 的完整圆形区域（含圆心），与机器人朝向无关。
+**实验开始前必须卸下 G1 雷达前的挡板。** 更新范围固定为以机体 IMU 平面位置为圆心、距离 0.3～2 m 的圆环区域，与机器人朝向无关。每次定位会话首次有效位姿输出时，一次性清空该位置半径 0.3 m 内的任务地图；后续内圈保留历史内容。
 
 2026-10-12：RViz 渲染改为 10 FPS，动态地图图形最多 5 Hz；地图融合和标准 OccupancyGrid 仍随有效点云更新。定位时间暂时领先于 BEV 里程计回调时，最多等待 1 秒自动重试，保留原有时间容差及健康检查。配置入口为 `fastlio/config/live_bev.yaml`，详见部署文档第 3.5、4 节。更新 Python/YAML/RViz 配置无需重新编译，重新启动界面后生效。
 
@@ -23,6 +23,20 @@ docker exec -it g1-fastlio-humble bash /work/deploy/start_live.sh
 ```bash
 RealWorldG1/tools/run_g1_live_bev.sh
 ```
+
+可选单 STG 误差记录：使用 `RealWorldG1/tools/run_g1_live_bev.sh --record-stg-errors`。
+连续导航中逐段保存约定的位姿、异常及无异常段的二维 L2 误差到
+`RealWorldG1/stg_error_results/*.jsonl`；不加参数时保持原有行为。
+字段和异常规则见部署文档第 9.10 节。此选项已于 2026-10-26 同步机载，并通过隔离 ROS 域测试。
+完整实验记录新增可选参数 `--record-experiment`，保存带时间戳的事件、轨迹、规划/STG、
+任务结果、关键地图快照，以及静态地图、配置和关键源码副本。
+**2026-10-26 已同步 G1，并通过机载隔离 ROS 域测试和无目标会话启停检查。**
+入口为 `RealWorldG1/tools/run_g1_live_bev.sh --record-experiment`，
+结果保存在机载 `RealWorldG1/posnav_experiments/<UTC时间>/`。
+可与 `--record-stg-errors` 同时使用，但完整实验记录自身已包含 STG 分段数据。
+使用、输出格式和完整性判定见部署文档第 9.14 节。
+2026-10-26 用户确认固定当前 STG navigation，实现摘要及两组共 14 条有效记录的统计见
+[部署文档第 9.12～9.13 节](../docs/G1_PosNav真机部署.md#912-当前-stg-navigation-实现固定2026-10-26-用户确认)。
 
 输入 G1 SSH 密码，终端显示 READY 后在浏览器打开：
 
@@ -42,7 +56,8 @@ WSL 中若存在 `ssh.exe`，脚本优先使用 Windows OpenSSH，让隧道直�
 - ROS Humble、CycloneDDS、domain 0、eth0；订阅 `/utlidar/imu_livox_mid360`、`/Odometry_loc`、`/cloud_registered_1`。
 - Xvfb + Mesa llvmpipe + Openbox 本地渲染；x11vnc 仅监听 `127.0.0.1:5901`，noVNC/websockify 仅监听 `127.0.0.1:6081`，通过 SSH 访问。
 - 正式地图按 `maps/full_lab_v1/package_manifest.json` 校验并复制；参数仍为高度 0.05～1.3 m、5 cm/格、count ≥ 2。
-- `.cache/live_bev/` 保存有容量上限的组件日志和当前运行配置；不产生 diagnostics 历史或自动录包。
+- 默认 `.cache/live_bev/` 保存有容量上限的组件日志和当前运行配置；不自动生成实验结果包或录 bag。
+  加 `--record-experiment` 后，本次导航/定位/RViz 组件日志和运行配置写入独立实验目录；不录原始点云/IMU bag。
 
 ## 重建依据
 
@@ -91,3 +106,7 @@ docker exec g1-posnav-humble bash /workspace/RealWorldG1/posnav/deploy/install_p
 ### G1 闭环运控（2026-10-13）
 
 实时界面同时启动空闲的 `g1_navigation_node.py`。定位与地图就绪、画好目标后，点击 **Start Navigation** 才会发送运动指令；**Stop Navigation** 停止当前任务，重画目标同样停止旧任务。参数、暂停恢复及验收状态见 `docs/G1_PosNav真机部署.md` 第 9 节。导航直接发布 G1 API 7105，每条有效期 0.1 s、50 Hz 刷新，不等待响应；不自动切换运动模式。
+
+### ROS 2 Action 与 TCP（2026-11-02）
+
+导航节点同时提供 `/nav/navigate_to`（`nav_interfaces/action/NavigateTo`）。RViz 和 Action 共用控制器，已有任务时拒绝新启动。机载先运行 `bash posnav/deploy/build_nav_interfaces.sh`；全量 `build.sh` 也包含此步骤。可独立启动 StarCo TCP 网桥，详细命令与接口语义见 [G1 Action 接口与 TCP 联调](../docs/G1_Action接口与TCP联调.md)。当前仍为 D1-803 地图，未配置 D3-619 配准；成功半径 0.50 m，暂不精调目标 yaw。

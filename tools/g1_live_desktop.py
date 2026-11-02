@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """G1-only desktop supervisor. VNC/websocket bind loopback; access via SSH tunnel."""
+import argparse
 import fcntl
 import os
 from pathlib import Path
@@ -22,6 +23,10 @@ def wait_port(port, child, timeout=15):
 
 
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--record-stg-errors',action='store_true')
+    parser.add_argument('--record-experiment',action='store_true')
+    args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     run=root/'.cache/live_bev';run.mkdir(parents=True,exist_ok=True)
     lock=(root/'.cache/desktop.lock').open('w')
@@ -39,8 +44,10 @@ def main():
             display=candidate;break
     if display is None:raise SystemExit('No free desktop display')
     children=[]
+    record_experiment=args.record_experiment
     def launch(name,args):
-        child=Child(args,run/(name+'.log'));children.append(child);return child
+        prefixes=('EXPERIMENT_',) if name=='interface' and record_experiment else ()
+        child=Child(args,run/(name+'.log'),relay_prefixes=prefixes);children.append(child);return child
     def interrupted(*_):raise KeyboardInterrupt
     signal.signal(signal.SIGTERM,interrupted)
     signal.signal(signal.SIGINT,interrupted)
@@ -60,7 +67,9 @@ def main():
         wait_port(5901,vnc)
         web=launch('web',['websockify','--web=/usr/share/novnc','127.0.0.1:6081','127.0.0.1:5901'])
         wait_port(6081,web)
-        app=launch('interface',['bash',str(root/'tools/run_live_bev.sh')])
+        app=launch('interface',['bash',str(root/'tools/run_live_bev.sh')]+
+                   (['--record-stg-errors'] if args.record_stg_errors else [])+
+                   (['--record-experiment'] if args.record_experiment else []))
         print('READY: tunnel laptop 6081 -> G1 127.0.0.1:6081; open http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale',flush=True)
         while all(c.proc.poll() is None for c in children):time.sleep(.25)
         if any(c.proc.poll() is not None for c in children if c is not app):
@@ -68,7 +77,7 @@ def main():
         if app.proc.poll() not in (None,0):raise RuntimeError('Live BEV interface exited; inspect interface.log')
     except KeyboardInterrupt:pass
     finally:
-        for child in reversed(children):child.close()
+        for child in reversed(children):child.close(timeout=35 if args.record_experiment else 5)
         lock.close()
 
 if __name__=='__main__':main()

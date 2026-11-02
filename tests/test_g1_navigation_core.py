@@ -31,8 +31,8 @@ class NavigationTest(unittest.TestCase):
     def start_walk(self):
         self.n.start((5., 0.), 0.)
         self.assertEqual(self.tick(0.), (0., 0.))
-        self.assertEqual(self.tick(.74), (0., 0.))
-        self.assertEqual(self.tick(.75), (.5, 0.))
+        self.assertEqual(self.n.state, 'walk_start')
+        self.assertEqual(self.tick(.02), (.5, 0.))
 
     def test_idle_never_sends_commands(self):
         self.assertIsNone(self.n.tick(100.))
@@ -68,14 +68,126 @@ class NavigationTest(unittest.TestCase):
         self.assertEqual(self.tick(.2, (0., 0., .17)), (0., 0.))
         self.assertEqual(self.n.state, 'turn_settle')
 
-    def test_initial_deadband(self):
-        for yaw in [-.11, .17]:
-            self.n.stop()
-            self.n.pose = (0., 0., yaw)
-            self.n.pose_time = self.n.map_time = 0.
-            self.n.start((5., 0.), 0.)
-            self.tick(0.)
-            self.assertEqual(self.n.state, 'turn_settle')
+    def test_initial_turn_selection_boundaries(self):
+        cases = [(-.180001, 'turn'), (-.18, 'turn_out'),
+                 (-.030001, 'turn_out'), (-.03, 'walk_start'),
+                 (0., 'walk_start'), (.03, 'walk_start'),
+                 (.030001, 'turn_out'), (.12, 'turn_out'),
+                 (.120001, 'turn')]
+        for error, state in cases:
+            with self.subTest(error=error):
+                self.setUp()
+                self.n.pose = (0., 0., -error)
+                self.n.start((5., 0.), 0.)
+                self.assertEqual(self.tick(0.), (0., 0.))
+                self.assertEqual(self.n.state, state)
+                if state == 'walk_start':
+                    self.assertEqual(self.tick(.02), (.5, 0.))
+                else:
+                    self.assertEqual(self.tick(.02), (0., 1. if error > 0. else -1.))
+
+    def test_small_turn_both_directions_excursion_then_return(self):
+        for yaw, sign in [(-.11, 1), (.17, -1)]:
+            with self.subTest(sign=sign):
+                self.setUp()
+                self.n.pose = (0., 0., yaw)
+                self.n.start((5., 0.), 0.)
+                self.assertEqual(self.tick(0.), (0., 0.))
+                self.assertEqual(self.n.state, 'turn_out')
+                self.assertEqual(self.tick(.02), (0., float(sign)))
+                self.assertEqual(self.tick(.1, (0., 0., yaw + sign*.39)), (0., float(sign)))
+                self.assertEqual(self.tick(.2, (0., 0., yaw + sign*.41)), (0., 0.))
+                self.assertEqual(self.n.state, 'turn_out_settle')
+                self.assertEqual(self.tick(.94), (0., 0.))
+                self.assertEqual(self.tick(.96), (0., 0.))
+                self.assertEqual(self.n.state, 'turn')
+                self.assertEqual(self.tick(.98), (0., float(-sign)))
+                self.assertEqual(self.tick(1., (0., 0., sign*.1)), (0., 0.))
+                self.assertEqual(self.n.state, 'turn_settle')
+                self.assertEqual(self.tick(1.74), (0., 0.))
+                self.assertEqual(self.tick(1.75, (0., 0., 0.)), (.5, 0.))
+                self.assertEqual(len(self.plans), 1)
+
+    def test_skipped_turn_waits_for_fresh_inputs_and_checks_obstacles(self):
+        self.n.start((5., 0.), 0.)
+        self.tick(0.)
+        self.assertEqual(self.tick(.31, fresh=False), (0., 0.))
+        self.assertEqual(self.n.state, 'walk_start')
+        self.blocked = True
+        self.assertEqual(self.tick(.32, (.02, .01, .01)), (0., 0.))
+        self.assertEqual(self.n.origin, (.02, .01))
+        self.assertEqual(self.n.state, 'obstacle')
+
+    def test_skipped_turn_can_cancel_before_forward_command(self):
+        self.n.start((5., 0.), 0.)
+        self.tick(0.)
+        self.n.stop('Stopped by user')
+        self.assertIsNone(self.tick(.02))
+
+    def test_consecutive_straight_segments_only_wait_for_walk_settle(self):
+        self.start_walk()
+        self.tick(1., (.9, 0., 0.))
+        self.assertEqual(self.n.state, 'walk_settle')
+        self.target = (2., 0.)
+        self.assertEqual(self.tick(1.49), (0., 0.))
+        self.tick(1.5, (1., 0., 0.))
+        self.tick(1.52)
+        self.assertEqual(self.n.state, 'walk_start')
+        self.assertEqual(self.tick(1.54), (.5, 0.))
+        self.assertEqual(self.n.origin, (1., 0.))
+
+    def test_return_uses_latest_position_and_heading_after_settle(self):
+        self.n.pose = (0., 0., -.1)
+        self.n.start((5., 0.), 0.)
+        self.tick(0.)
+        self.tick(.2, (0., 0., .31))
+        # Position and yaw both drift during the first wait.
+        self.tick(.96, (.1, .2, .4))
+        expected = math.atan2(-.2, .9) - .4
+        self.assertAlmostEqual(self.n.turn_error, expected)
+        self.assertEqual(self.tick(.98), (0., -1.))
+        # Old target heading would stop here; updated bearing still needs turn.
+        self.assertEqual(self.tick(1., (.1, .2, .1)), (0., -1.))
+        self.assertEqual(self.tick(1.1, (.1, .2, -.1)), (0., 0.))
+        self.assertEqual(self.n.state, 'turn_settle')
+
+    def test_excursion_wrap_pause_and_cancel(self):
+        for sign in (1, -1):
+            with self.subTest(sign=sign):
+                self.setUp()
+                yaw = sign*3.1
+                bearing = yaw + sign*.1
+                self.target = (math.cos(bearing), math.sin(bearing))
+                self.n.pose = (0., 0., yaw)
+                self.n.start((5., 0.), 0.)
+                self.tick(0.)
+                self.assertEqual(self.tick(.31, fresh=False), (0., 0.))
+                angle = yaw + sign*.2
+                pose = (0., 0., math.atan2(math.sin(angle), math.cos(angle)))
+                self.assertEqual(self.tick(.4, pose), (0., float(sign)))
+                self.assertAlmostEqual(self.n.turn_progress, .2)
+                angle = yaw + sign*.41
+                self.tick(.5, (0., 0., math.atan2(math.sin(angle), math.cos(angle))))
+                self.assertEqual(self.n.state, 'turn_out_settle')
+                self.assertEqual(self.tick(1.3, fresh=False), (0., 0.))
+                self.assertEqual(self.n.state, 'turn_out_settle')
+                self.n.stop('Stopped by user')
+                self.assertIsNone(self.tick(1.4))
+
+    def test_return_small_error_does_not_repeat_excursion(self):
+        self.n.pose = (0., 0., -.1)
+        self.n.start((5., 0.), 0.)
+        self.tick(0.)
+        self.tick(.2, (0., 0., .31))
+        self.tick(.96, (0., 0., .05))
+        self.assertEqual(self.tick(.98), (0., 0.))
+        self.assertEqual(self.n.state, 'turn_settle')
+
+    def test_forward_stops_with_fifteen_cm_remaining(self):
+        self.start_walk()
+        self.assertEqual(self.tick(1., (.849, .3, 0.)), (.5, 0.))
+        self.assertEqual(self.tick(1.02, (.851, .3, 0.)), (0., 0.))
+        self.assertEqual(self.n.state, 'walk_settle')
 
     def test_wrap_boundary_does_not_false_stop(self):
         self.n.pose = (0., 0., -3.13)
@@ -86,7 +198,7 @@ class NavigationTest(unittest.TestCase):
 
     def test_forward_projection_and_overshoot(self):
         self.start_walk()
-        self.assertEqual(self.tick(1., (.9, .4, 0.)), (.5, 0.))
+        self.assertEqual(self.tick(1., (.84, .4, 0.)), (.5, 0.))
         self.assertEqual(self.tick(1.1, (1.05, .4, 0.)), (0., 0.))
         self.assertEqual(self.n.state, 'walk_settle')
         self.assertEqual(self.n.origin, (0., 0.))
@@ -171,9 +283,11 @@ class NavigationTest(unittest.TestCase):
         self.assertFalse(self.n.active)
 
     def test_goal_reached_during_turn_wait_skips_walking(self):
+        self.n.pose = (0., 0., -1.)
         self.n.start((1., 0.), 0.)
         self.tick(0.)
-        self.assertEqual(self.tick(.75, (.6, 0., 0.)), (0., 0.))
+        self.tick(.02, (0., 0., -.1))
+        self.assertEqual(self.tick(.77, (.6, 0., 0.)), (0., 0.))
         self.assertEqual(self.n.state, 'walk_settle')
 
     def test_no_stg_is_not_success(self):
@@ -197,8 +311,8 @@ class NavigationTest(unittest.TestCase):
         self.assertEqual(self.tick(2., (.2, 0., 0.)), (0., 0.))
         self.assertEqual(self.plans[-1][0], (.2, 0.))
         self.assertEqual(self.n.stg, (1.5, 0.))
-        self.assertEqual(self.n.state, 'turn_settle')
-        self.assertEqual(self.tick(2.75), (.5, 0.))
+        self.assertEqual(self.n.state, 'walk_start')
+        self.assertEqual(self.tick(2.02), (.5, 0.))
 
     def test_blocked_segment_retry_pauses_for_stale_input_and_can_cancel(self):
         self.blocked = True
@@ -237,9 +351,9 @@ class NavigationTest(unittest.TestCase):
             self.assertEqual(self.n.reason, str(error))
         self.assertEqual(self.tick(2., (.1, 0., 0.)), (0., 0.))
         self.n.plan.assert_called_with((.1, 0.), (5., 0.))
-        self.assertEqual(self.n.state, 'turn_settle')
+        self.assertEqual(self.n.state, 'walk_start')
         self.assertNotIn('unreachable', self.n.reason)
-        self.assertEqual(self.tick(2.75), (.5, 0.))
+        self.assertEqual(self.tick(2.02), (.5, 0.))
 
     def test_retry_waits_for_inputs_then_can_be_cancelled(self):
         self.n.plan = Mock(side_effect=GoalUnreachable('Goal is unreachable from the current position'))

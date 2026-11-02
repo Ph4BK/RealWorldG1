@@ -48,6 +48,92 @@ class NodeTest(unittest.TestCase):
         self.cloud(12.)
     def registration(self,t,fitness=.9):
         self.node.on_registration(String(data=json.dumps(dict(stamp=t,fitness=fitness,accepted=True,transform=np.eye(4).ravel().tolist()))))
+    def start_session(self):
+        self.seed()
+        arrow=PoseWithCovarianceStamped();arrow.header.frame_id='map';arrow.pose.pose.orientation.w=1.
+        self.node.on_arrow(arrow)
+        child=SimpleNamespace(proc=SimpleNamespace(poll=lambda:None),close=lambda:None)
+        with patch('live_bev_node.Child',return_value=child):
+            response=self.node.start(None,Trigger.Response())
+        self.assertTrue(response.success,response.message)
+
+    def test_experiment_preserves_each_localization_initialization_and_operations(self):
+        from experiment_recorder import ExperimentSession
+        experiment=ExperimentSession(ROOT,ROOT/'maps/full_lab_v1',
+            ROOT/'fastlio/config/live_bev.yaml',Path(self.tmp.name)/'experiments')
+        self.node.experiment=experiment
+        try:
+            self.start_session()
+            self.node.reset_map(None,Trigger.Response())
+            self.node.stop(None,Trigger.Response())
+            self.start_session()
+            experiment.writer.queue.join()
+            first=json.loads((experiment.path/'assets/config/localization_0001.json').read_text())
+            second=json.loads((experiment.path/'assets/config/localization_0002.json').read_text())
+            self.assertIn('T_map_from_odom',first['initial'])
+            self.assertIn('path_map',second['parameters'])
+            events=[json.loads(line)['event'] for line in
+                    (experiment.path/'localization_events.jsonl').read_text().splitlines()]
+            self.assertEqual(events.count('localization_initialized'),2)
+            self.assertIn('static_map_reset_request',events)
+            self.assertIn('localization_stop_request',events)
+        finally:
+            experiment.close()
+            self.node.experiment=None
+
+    def test_initial_clear_uses_first_output_pose_once_and_draws_annulus(self):
+        n=self.node;n.core.static[:]=True
+        self.start_session()
+        self.assertTrue(n.initial_clear_pending)
+        self.assertTrue(n.core.task.all())
+        self.odom(12.1);self.cloud(12.1);n.tick()  # No accepted localization yet.
+        self.assertTrue(n.core.task.all())
+        self.assertTrue(n.initial_clear_pending)
+        transform=np.eye(4);transform[0,3]=1.  # ICP differs from the drawn arrow.
+        n.on_registration(String(data=json.dumps(dict(stamp=12.1,fitness=.9,
+            accepted=True,transform=transform.ravel().tolist()))))
+        with patch.object(n.maps['task'],'publish') as maps, patch.object(n.boundary,'publish') as boundary:
+            self.odom(12.2);self.cloud(12.2);n.tick()
+            self.assertFalse(n.initial_clear_pending)
+            inner=np.hypot(n.core.x-1.,n.core.y)<=.3
+            np.testing.assert_array_equal(n.core.task,~inner)
+            self.assertTrue(n.core.static.all())
+            self.assertEqual(n.updates,0)  # First pose precedes a full window.
+            self.assertEqual(maps.call_args.args[0].header.stamp.sec,0)
+            marker=boundary.call_args.args[0]
+            radii=np.array([np.hypot(p.x,p.y) for p in marker.points])
+            self.assertEqual(len(radii),396)
+            np.testing.assert_allclose(radii[:198],.3)
+            np.testing.assert_allclose(radii[198:],2.)
+        # Even after new observations/pause/recovery, this is not a moving clear disk.
+        n.core.task[inner]=True
+        n.core.pause()
+        for i in range(n.core.window):
+            t=12.3+.1*i;self.odom(t);self.cloud(t);n.tick()
+        self.assertTrue(n.core.task[inner].all())
+        self.assertGreater(n.updates,0)
+        n.reset_map(None,Trigger.Response())
+        self.assertTrue(n.core.task.all())
+        self.odom(13.4);self.cloud(13.4);n.tick()
+        self.assertTrue(n.core.task[inner].all())
+        self.assertFalse(n.initial_clear_pending)
+        n.stop(None,Trigger.Response())
+        self.start_session()
+        self.assertTrue(n.initial_clear_pending)
+        self.registration(12.)
+        self.odom(12.1);self.cloud(12.1);n.tick()
+        inner=np.hypot(n.core.x,n.core.y)<=.3
+        self.assertFalse(n.core.task[inner].any())
+        self.assertFalse(n.initial_clear_pending)
+
+    def test_static_restore_before_first_pose_disables_initial_clear(self):
+        n=self.node;n.core.static[:]=True
+        self.start_session()
+        n.reset_map(None,Trigger.Response())
+        self.assertFalse(n.initial_clear_pending)
+        self.registration(12.)
+        self.odom(12.1);self.cloud(12.1);n.tick()
+        self.assertTrue(n.core.task.all())
     def test_arrow_start_stop_and_live_fusion(self):
         n=self.node
         response=n.start(None,Trigger.Response());self.assertFalse(response.success)

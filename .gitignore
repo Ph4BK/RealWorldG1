@@ -3,6 +3,16 @@
 **/*.pyo
 **/*.pyd
 .cache/
+/stg_error_results/
+
+# Local scene datasets, delivered logs and reference documents excluded from releases.
+/datasets/D3-619_scene/
+/datasets/D3-619_地图_v1_2026-10-21/
+/posnav_experiments/20261026T135228Z/
+/docs/G1导航与误差测量.md
+/docs/G1导航问题手册.md
+/docs/申乐天_平台与四组实验补充说明_2026-10-31.md
+/docs/申乐天_补充交付任务说明与验收清单_2026-10-27.md
 
 # Raw recordings stay outside ordinary Git; retain their metadata.
 /datasets/**/bag/**

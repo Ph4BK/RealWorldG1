@@ -47,37 +47,60 @@ class FusionTest(unittest.TestCase):
         c.add(3.,[[0,0,0]],[0,0,0]);self.assertEqual(len(c.frames),1)
         c.add(1.,[[0,0,0]],[0,0,0]);np.testing.assert_array_equal(c.task,c.static)
 
-    def test_full_disk_clears_stale_nearby_obstacles_and_preserves_exterior(self):
+    def test_annulus_updates_and_preserves_inner_and_outer_history(self):
         c=RollingBEV(np.ones((100,100),bool),[-2.5,-2.5],.05,
                      window=10,max_window_age=2.)
         radius=np.hypot(c.x,c.y)
-        expected=radius<=2.
+        expected=(radius>=.3)&(radius<=2.)
         np.testing.assert_array_equal(c.region(0,0),expected)
         for i in range(10):
             self.assertEqual(c.add(i*.1,[[0.,0.,0.]],[0,0,.7]),i==9)
         self.assertFalse(c.task[self.cell(c,1.,0.)])
         self.assertFalse(c.task[self.cell(c,-1.,0.)])
-        self.assertFalse(c.task[self.cell(c,0.,0.)])
-        self.assertFalse(c.task[self.cell(c,.25,0.)])
+        self.assertTrue(c.task[self.cell(c,0.,0.)])
+        self.assertTrue(c.task[self.cell(c,.25,0.)])
         self.assertTrue(c.task[self.cell(c,2.3,0.)])
         self.assertTrue(c.static.all())
 
-    def test_nearby_live_obstacle_is_retained_in_full_disk(self):
-        c=RollingBEV(np.ones((100,100),bool),[-2.5,-2.5],.05)
-        for i in range(10):
-            c.add(i*.1,[[.2,0.,.5],[.2,0.,.6]],[0,0,0])
-        self.assertTrue(c.task[self.cell(c,.2,0.)])
-        self.assertFalse(c.task[self.cell(c,0.,0.)])
+    def test_observed_obstacle_is_preserved_when_robot_moves_close(self):
+        c=RollingBEV(np.zeros((100,100),bool),[-2.5,-2.5],.05,
+                     window=1,min_points=1)
+        cell=self.cell(c,1.,0.)
+        c.add(0,[[1.,0.,.5]],[0,0,0])
+        self.assertTrue(c.task[cell])
+        c.add(.1,[[0.,0.,0.]],[.9,0,0])
+        self.assertFalse(c.mask[cell])
+        self.assertTrue(c.task[cell])
+        c.add(.2,[[0.,0.,0.]],[0,0,0])
+        self.assertFalse(c.task[cell])
 
-    def test_disk_boundary_is_inclusive_and_moves_with_robot(self):
-        c=RollingBEV(np.zeros((7,7),bool),[-3.5,-3.5],1.)
+    def test_annulus_boundaries_and_translation(self):
+        c=RollingBEV(np.zeros((7,7),bool),[-3.5,-3.5],1.,inner_radius=1.)
         region=c.region(0,0)
-        self.assertTrue(region[3,3])
+        self.assertFalse(region[3,3])
+        self.assertTrue(region[3,4])  # Exactly inner radius.
         self.assertTrue(region[3,5])  # Exactly 2 m.
         self.assertFalse(region[4,5])
         moved=c.region(1,0)
+        self.assertFalse(moved[3,4])
         self.assertTrue(moved[3,6])
         self.assertFalse(moved[3,1])
+
+    def test_initial_clear_changes_only_task_disk_and_reset_restores_static(self):
+        c=RollingBEV(np.ones((100,100),bool),[-2.5,-2.5],.05)
+        c.clear_initial_region(1.,.5)
+        inner=np.hypot(c.x-1.,c.y-.5)<=.3
+        np.testing.assert_array_equal(c.task,~inner)
+        self.assertTrue(c.static.all())
+        c.pause()
+        np.testing.assert_array_equal(c.task,~inner)
+        c.reset()
+        self.assertTrue(c.task.all())
+
+    def test_invalid_inner_radius_rejected(self):
+        for radius in [-.1,2.,3.,float('nan'),float('inf')]:
+            with self.subTest(radius=radius), self.assertRaises(ValueError):
+                RollingBEV(np.zeros((2,2),bool),[0,0],.05,inner_radius=radius)
 
     def test_window_max_age(self):
         c=self.make()

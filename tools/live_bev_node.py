@@ -31,6 +31,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import StaticTransformBroadcaster
 from live_bev_core import RollingBEV, checked_transform, initial_map_from_odom
 from posnav_fmm.planner import plan_snapshot
+from experiment_recorder import ExperimentSession
 
 
 def stamp_s(stamp):
@@ -52,7 +53,8 @@ def fill_pose(pose, t):
 
 
 class Child:
-    def __init__(self, command, log_path):
+    def __init__(self, command, log_path, relay_prefixes=()):
+        self.relay_prefixes = relay_prefixes
         self.logger = logging.Logger(str(log_path))
         self.handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=1)
         self.logger.addHandler(self.handler)
@@ -64,13 +66,15 @@ class Child:
     def drain(self):
         for line in self.proc.stdout:
             self.logger.warning(line.rstrip())
+            if self.relay_prefixes and line.startswith(self.relay_prefixes):
+                print(line.rstrip(), flush=True)
         self.proc.stdout.close()
 
-    def close(self):
+    def close(self, timeout=5):
         if self.proc.poll() is None:
             os.killpg(self.proc.pid, signal.SIGINT)
             try:
-                self.proc.wait(timeout=5)
+                self.proc.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 os.killpg(self.proc.pid, signal.SIGTERM)
                 try:
@@ -86,6 +90,7 @@ class LiveBEV(Node):
     def __init__(self, args):
         super().__init__('g1_live_bev')
         self.args = args
+        self.experiment = getattr(args, 'experiment', None)
         self.cfg = yaml.safe_load(args.config.read_text())
         self.map_config = json.loads((args.map_dir / 'bev_config.json').read_text())
         with np.load(args.map_dir / 'bev_occupancy.npz') as d:
@@ -93,6 +98,7 @@ class LiveBEV(Node):
                 window=self.cfg['window_frames'], min_points=self.cfg['min_points'],
                 z_min=self.cfg['z_min'], z_max=self.cfg['z_max'],
                 radius=self.cfg['update_radius_m'],
+                inner_radius=self.cfg['update_inner_radius_m'],
                 max_window_age=self.cfg['max_window_age_s'])
         assert np.allclose(self.core.origin, self.map_config['origin_xy_m'])
         assert self.core.res == self.map_config['resolution_m']
@@ -113,6 +119,7 @@ class LiveBEV(Node):
         self.accepted = False
         self.child = None
         self.active = False
+        self.initial_clear_pending = False
         self.message = 'Keep G1 stationary; wait for live sensors, then draw an arrow.'
         self.error = ''
         self.registration_error = ''
@@ -284,7 +291,7 @@ class LiveBEV(Node):
             self.plan=plan_snapshot(self.core.task.copy(),self.core.origin,self.core.res,
                 robot[:2,3],(self.goal['x'],self.goal['y']),
                 inflation_cells=self.cfg['fmm_inflation_cells'], step_cells=self.cfg['fmm_step_cells'],
-                max_stgs=self.cfg['fmm_max_stgs'], fallback_cells=self.cfg['fmm_fallback_cells'])
+                max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'])
             if self.plan.stg_xy is not None:
                 marker=Marker();marker.header.frame_id='map';marker.header.stamp=self.get_clock().now().to_msg()
                 marker.ns='stg_macro';marker.id=0;marker.type=Marker.SPHERE;marker.action=Marker.ADD
@@ -304,11 +311,16 @@ class LiveBEV(Node):
         return response
 
     def on_arrow(self, m):
+        if self.experiment:
+            self.experiment.event('initial_arrow_request', frame_id=m.header.frame_id,
+                source_stamp_ns=m.header.stamp.sec*1000000000+m.header.stamp.nanosec)
         if self.child is not None:
             # A rejected UI action is not a localization/sensor failure.
             self.notice = 'Initial pose unchanged. Stop localization before drawing a new arrow.'
             self.notice_until = time.monotonic() + 5.
             self.publish_status()
+            if self.experiment:
+                self.experiment.event('initial_arrow_rejected', reason=self.notice)
             return
         try:
             if m.header.frame_id != 'map':
@@ -325,12 +337,17 @@ class LiveBEV(Node):
             self.error = ''
         except ValueError as exc:
             self.error = str(exc)
+        if self.experiment:
+            self.experiment.event('initial_arrow_result', accepted=not bool(self.error),
+                                  selected=self.selected, error=self.error)
         self.publish_status()
 
     def start(self, request, response):
         if self.child is not None:
             response.success = False
             response.message = 'Localization is already started; stop it first'
+            if self.experiment:
+                self.experiment.event('localization_start_request', accepted=False, message=response.message)
             return response
         try:
             if self.selected is None:
@@ -352,6 +369,8 @@ class LiveBEV(Node):
             config = self.args.run_dir/'localization.yaml'
             config.write_text(yaml.safe_dump({'global_localization_node':{'ros__parameters':params}},sort_keys=False))
             (self.args.run_dir/'initial_pose.json').write_text(json.dumps(dict(**p, T_map_from_odom=seed.tolist()),indent=2))
+            if self.experiment:
+                self.experiment.initialization(dict(**p, T_map_from_odom=seed.tolist()), params)
             command = ['ros2','run','open3d_loc','global_localization_node','--ros-args',
                 '-r','__node:=global_localization_node','--params-file',str(config),
                 '-r',f'/cloud_registered_1:={self.cfg["cloud_topic"]}',
@@ -360,6 +379,7 @@ class LiveBEV(Node):
             self.child = Child(command, self.args.run_dir/'localization.log')
             self.active = True; self.transform = None; self.accepted = False
             self.registration_stamp = -math.inf; self.core.reset(); self.pending.clear(); self.updates = 0
+            self.initial_clear_pending = True
             self.map_update_stamp = None
             self.pending_registrations.clear()
             self.registration_deferred = self.registration_wait_timeouts = 0
@@ -369,15 +389,20 @@ class LiveBEV(Node):
             response.success = True; response.message = self.message
         except (ValueError, OSError) as exc:
             response.success = False; response.message = str(exc); self.error = str(exc)
+        if self.experiment:
+            self.experiment.event('localization_start_request', accepted=response.success, message=response.message)
         self.publish_status()
         return response
 
     def stop(self, request, response):
         self.nav_cancel.publish(Empty())
+        if self.experiment:
+            self.experiment.event('localization_stop_request')
         self.map_update_stamp = None
         self.clear_plan()
         self.notice = ''; self.notice_until = 0.
         self.active = False
+        self.initial_clear_pending = False
         self.pending_registrations.clear()
         if self.child is not None:
             self.child.close(); self.child = None
@@ -390,9 +415,12 @@ class LiveBEV(Node):
 
     def reset_map(self, request, response):
         self.nav_cancel.publish(Empty())
+        if self.experiment:
+            self.experiment.event('static_map_reset_request')
         self.map_update_stamp = None
         self.clear_plan()
         self.core.reset(); self.pending.clear(); self.updates = 0
+        self.initial_clear_pending = False
         self.publish_maps()
         response.success = True; response.message = f'Static map restored; collecting {self.core.window} new frames.'
         return response
@@ -521,13 +549,17 @@ class LiveBEV(Node):
                         robot = self.transform @ pose
                         yaw = math.atan2(robot[1,0], robot[0,0])
                         updated = self.core.add(stamp, mapped, [robot[0,3], robot[1,3], yaw])
+                        initial_cleared = self.initial_clear_pending
+                        if initial_cleared:
+                            self.core.clear_initial_region(robot[0,3], robot[1,3])
+                            self.initial_clear_pending = False
                         self.publish_pose(robot, cloud.header.stamp)
                         if updated:
                             self.map_update_stamp = self.get_clock().now().to_msg()
                             self.updates += 1; self.publish_maps(force_display=False)
                             self.message = f'Updating; {self.updates} updates; fitness={self.fitness:.3f}'
                         else:
-                            if not self.core.frames:
+                            if initial_cleared or not self.core.frames:
                                 self.publish_maps()
                             self.message = f'Collecting valid frames: {len(self.core.frames)}/{self.core.window}'
                     except (ValueError, AssertionError, KeyError) as exc:
@@ -623,10 +655,10 @@ class LiveBEV(Node):
         marker.pose.orientation.z=0.; marker.pose.orientation.w=1.
         marker.scale.x=.025; marker.color.r=1.; marker.color.g=.55; marker.color.a=1.
         angles=np.linspace(0.,2*math.pi,100)
-        radius=self.core.radius
-        ring=[Point(x=float(radius*np.cos(a)), y=float(radius*np.sin(a)), z=.02) for a in angles]
-        for start,end in zip(ring[:-1],ring[1:]):
-            marker.points.extend([start,end])
+        for radius in (self.core.inner_radius, self.core.radius):
+            ring=[Point(x=float(radius*np.cos(a)), y=float(radius*np.sin(a)), z=.02) for a in angles]
+            for start,end in zip(ring[:-1],ring[1:]):
+                marker.points.extend([start,end])
         self.boundary.publish(marker)
 
     def publish_status(self):
@@ -649,27 +681,56 @@ def main():
     parser.add_argument('--config',type=Path,default=root/'fastlio/config/live_bev.yaml')
     parser.add_argument('--run-dir',type=Path,default=root/'.cache/live_bev')
     parser.add_argument('--headless',action='store_true')
+    parser.add_argument('--record-stg-errors',action='store_true')
+    parser.add_argument('--record-experiment',action='store_true',
+                        help='Save a self-contained timestamped experiment bundle on G1')
     args=parser.parse_args(); args.run_dir.mkdir(parents=True,exist_ok=True)
-    rclpy.init(); node=LiveBEV(args); rviz=None; navigation=None
+    experiment = None
+    if args.record_experiment:
+        experiment = ExperimentSession(root, args.map_dir, args.config)
+        args.experiment = experiment
+        # Load the captured map/config so the evidence matches actual runtime inputs.
+        args.map_dir = experiment.path/'assets/map'
+        args.config = experiment.path/'assets/config/live_bev.yaml'
+        args.run_dir = experiment.path/'component_logs'
+        print('EXPERIMENT_DIR: '+str(experiment.path), flush=True)
+    rclpy.init(); node=None; rviz=None; navigation=None
+    clean = False
+    failure = None
     try:
+        node=LiveBEV(args)
         navigation=Child([sys.executable,str(root/'tools/g1_navigation_node.py'),
-                          '--config',str(args.config)],args.run_dir/'navigation.log')
+                          '--config',str(args.config)]+
+                         (['--record-stg-errors'] if args.record_stg_errors else [])+
+                         (['--experiment-dir',str(experiment.path)] if experiment else []),
+                         args.run_dir/'navigation.log')
         if not args.headless:
             rviz=Child(['rviz2','-d',str(root/'fastlio/rviz/live_bev.rviz'),'--ros-args','-p','use_sim_time:=false',
                         '--disable-external-lib-logs','--disable-rosout-logs'],args.run_dir/'rviz.log')
         print('READY: live BEV UI; navigation stays idle until Start Navigation.',flush=True)
         while rclpy.ok() and (rviz is None or rviz.proc.poll() is None):
             rclpy.spin_once(node,timeout_sec=.1)
+            if navigation.proc.poll() is not None:
+                raise RuntimeError('Navigation process exited; inspect navigation.log')
+            if experiment and experiment.writer.error:
+                raise RuntimeError('Experiment recording failed: '+experiment.writer.error)
         if rviz is not None and rviz.proc.poll() not in (None, 0):
             raise RuntimeError('RViz exited with an error; inspect rviz.log')
+        clean = True
     except (KeyboardInterrupt,ExternalShutdownException):
-        pass
+        clean = True
+    except Exception as exc:
+        failure = str(exc)
+        raise
     finally:
-        if navigation is not None: navigation.close()
-        if node.child is not None: node.child.close()
+        if navigation is not None: navigation.close(timeout=20 if experiment else 5)
+        if node is not None and node.child is not None: node.child.close()
         if rviz is not None: rviz.close()
-        node.destroy_node()
+        if node is not None: node.destroy_node()
         if rclpy.ok(): rclpy.shutdown()
+        if experiment:
+            experiment.close(clean=clean, error=failure)
+            print('EXPERIMENT_SAVED: '+str(experiment.path), flush=True)
 
 
 if __name__=='__main__':
