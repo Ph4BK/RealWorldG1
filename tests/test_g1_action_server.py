@@ -18,10 +18,12 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid
 from nav_interfaces.action import NavigateTo
 from std_srvs.srv import Trigger
+from visualization_msgs.msg import Marker
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tools'))
@@ -90,10 +92,10 @@ class ActionTest(unittest.TestCase):
         grid = OccupancyGrid()
         grid.header.frame_id = 'map'
         grid.header.stamp = self.node.get_clock().now().to_msg()
-        grid.info.width = grid.info.height = 100
+        grid.info.width = grid.info.height = 200
         grid.info.resolution = .05
         grid.info.origin.orientation.w = 1.
-        grid.data = [0]*10000
+        grid.data = [0]*40000
         self.node.on_map(grid)
 
     def refresh(self):
@@ -129,18 +131,108 @@ class ActionTest(unittest.TestCase):
         self.assertFalse(self.node.control.active)
         self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0., 0., 0.])
 
-    def test_coarse_arrival_and_actual_scene_pose(self):
+    def wait_until(self, predicate):
+        deadline = time.monotonic()+4.
+        while not predicate() and time.monotonic() < deadline:
+            self.refresh()
+            self.executor.spin_once(timeout_sec=.01)
+        self.assertTrue(predicate(), 'Display update timed out')
+
+    def test_action_goal_reaches_late_display_without_redraw_or_stg_deletion(self):
+        from live_bev_node import LiveBEV
+        self.node.action.transform = (1., 2., math.pi/2)
+        g = self.goal(3.)
+        g.g_yaw = .3
+        handle = self.send(g)
+        self.assertTrue(handle.accepted)
+        expected = self.node.action.map_pose((g.g_x, g.g_y, g.g_yaw))
+        # Start the display after acceptance: the retained goal must be delivered.
+        with tempfile.TemporaryDirectory() as tmp:
+            view = LiveBEV(SimpleNamespace(config=ROOT/'fastlio/config/live_bev.yaml',
+                map_dir=ROOT/'maps/full_lab_v1', run_dir=Path(tmp)))
+            self.executor.add_node(view)
+            try:
+                with patch.object(view.stg_display, 'publish') as stg:
+                    self.wait_until(lambda: view.goal is not None)
+                    stg.assert_not_called()
+                self.assertTrue(self.node.control.active)
+                self.assertEqual(bytes(self.node.action.current.handle.goal_id.uuid),
+                                 bytes(handle.goal_id.uuid))
+                for key, value in zip(('x', 'y', 'yaw'), expected):
+                    self.assertAlmostEqual(view.goal[key], value)
+                self.assertEqual(json.loads((Path(tmp)/'goal_pose.json').read_text()), view.goal)
+                # RViz may attach later still; its marker must also be retained.
+                markers = []
+                qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+                sub = self.peer.create_subscription(Marker, '/g1/live_bev/goal_display', markers.append, qos)
+                try:
+                    self.wait_until(lambda: bool(markers))
+                    m = markers[-1]
+                    self.assertEqual(m.header.frame_id, 'map')
+                    self.assertEqual(m.ns, 'posnav_goal')
+                    self.assertAlmostEqual(m.pose.position.x, expected[0])
+                    self.assertAlmostEqual(m.pose.position.y, expected[1])
+                    self.assertAlmostEqual(m.pose.orientation.z, math.sin(expected[2]/2))
+                    self.assertEqual((m.color.r, m.color.g, m.color.b), (1., 0., 0.))
+                    self.assertTrue(self.node.control.active)
+                finally:
+                    self.peer.destroy_subscription(sub)
+                self.spin(handle.cancel_goal_async())
+                self.assertEqual(self.spin(handle.get_result_async()).status, 5)
+            finally:
+                self.executor.remove_node(view)
+                view.destroy_node()
+
+    def test_goal_state_rejects_busy_updates_and_tracks_action_manual_action_order(self):
+        goals = []
+        qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        sub = self.peer.create_subscription(PoseStamped, '/g1/navigation/goal', goals.append, qos)
+        try:
+            first = self.send(self.goal(3.))
+            self.assertTrue(first.accepted)
+            self.wait_until(lambda: bool(goals))
+            self.assertEqual(goals[-1].pose.position.x, 3.)
+            with patch.object(self.node.goal_state, 'publish') as publish:
+                self.assertFalse(self.send(self.goal(4.)).accepted)
+                publish.assert_not_called()
+            manual = PoseStamped()
+            manual.header.frame_id = 'map'
+            manual.pose.position.x = 2.
+            manual.pose.orientation.w = 1.
+            pub = self.peer.create_publisher(PoseStamped, '/g1/live_bev/goal_2d', 10)
+            try:
+                self.wait_until(lambda: pub.get_subscription_count() > 0)
+                pub.publish(manual)
+                self.wait_until(lambda: goals[-1].pose.position.x == 2.)
+                self.assertEqual(self.spin(first.get_result_async()).result.reason, 'goal_redrawn')
+                self.assertFalse(self.node.control.active)
+                second = self.send(self.goal(4.))
+                self.assertTrue(second.accepted)
+                self.wait_until(lambda: goals[-1].pose.position.x == 4.)
+                self.assertTrue(self.node.control.active)
+                self.spin(second.cancel_goal_async())
+                self.spin(second.get_result_async())
+            finally:
+                self.peer.destroy_publisher(pub)
+        finally:
+            self.peer.destroy_subscription(sub)
+
+    def test_fine_completion_and_actual_scene_pose(self):
         self.xy_yaw = (.1, .02, .4)
         self.refresh()
-        h = self.send(self.goal(.3))
+        goal = self.goal(.2)
+        goal.g_yaw = .4
+        h = self.send(goal)
         self.assertTrue(h.accepted)
+        self.wait_until(lambda: self.node.control.state == 'fine_approach')
+        self.xy_yaw = (.21, .02, .4)
         r = self.spin(h.get_result_async())
         self.assertEqual(r.status, 4)
         self.assertTrue(r.result.success)
         self.assertEqual(r.result.reason, 'arrived')
         self.assertEqual(r.result.final_pose.header.frame_id, 'scene')
-        self.assertAlmostEqual(r.result.final_pose.pose.position.x, .1)
-        self.assertAlmostEqual(r.result.internal_error, math.hypot(.2, .02), places=5)
+        self.assertAlmostEqual(r.result.final_pose.pose.position.x, .21)
+        self.assertAlmostEqual(r.result.internal_error, math.hypot(.01, .02), places=5)
         self.assertEqual(r.result.uncertainty, -1.)
         self.stopped()
 
@@ -159,11 +251,106 @@ class ActionTest(unittest.TestCase):
         self.assertEqual(r.result.reason, 'cancelled')
         self.stopped()
 
+    def test_recovery_sectors_use_uninflated_cell_centers_and_body_yaw(self):
+        import numpy as np
+        occ = np.zeros((41, 41), dtype=bool)
+        origin = (-1.025, -1.025)
+        for x, y in ((.1, 0.), (.3, 0.), (.75, 0.), (.8, 0.),
+                     (0., .1), (-.1, 0.), (0., -.1), (.1, .1), (-.1, -.1)):
+            occ[round(y/.05)+20, round(x/.05)+20] = True
+        result = nav.recovery_occupancy(occ, origin, .05, (0., 0., 0.))
+        self.assertEqual(result['near_count'], 7)
+        self.assertEqual(result['sector_counts'], [3, 2, 1, 2])
+        rotated = nav.recovery_occupancy(occ, origin, .05, (0., 0., math.pi/2))
+        self.assertEqual(rotated['sector_counts'], [2, 1, 2, 3])
+        translated = nav.recovery_occupancy(occ, (origin[0]+2., origin[1]-3.),
+                                            .05, (2., -3., 0.))
+        self.assertEqual(translated, result)
+
+    def test_recovery_feedback_and_lateral_command_keep_original_action_alive(self):
+        from posnav_fmm.errors import GoalUnreachable
+        self.node.control.plan = lambda *_: (_ for _ in ()).throw(GoalUnreachable('near-field blocked'))
+        self.node.control.recovery = lambda _: dict(near_count=1, sector_counts=[4, 0, 2, 3])
+        handle = self.send()
+        self.wait_until(lambda: self.node.control.state == 'recovery_left')
+        self.wait_until(lambda: any(f.stage == 'recovery_left (1/3)' for f in self.feedback))
+        self.assertTrue(self.node.control.active)
+        self.assertTrue(any(json.loads(c.parameter)['velocity'] == [0., .5, 0.] for c in self.commands))
+        status = json.loads(self.node.last_status)
+        self.assertEqual(status['recovery_count'], 1)
+        self.assertEqual(status['recovery_sector_counts'], [4, 0, 2, 3])
+        self.assertAlmostEqual(self.feedback[-1].remaining_dist, 3.)
+        self.spin(handle.cancel_goal_async())
+        self.assertEqual(self.spin(handle.get_result_async()).status, 5)
+        self.stopped()
+
+    def test_recovery_exhaustion_and_timeout_return_real_terminal_results(self):
+        from posnav_fmm.errors import GoalUnreachable
+        self.node.control.plan = lambda *_: (_ for _ in ()).throw(GoalUnreachable('near-field blocked'))
+        self.node.control.recovery = lambda _: dict(near_count=1, sector_counts=[0]*4)
+        h = self.send()
+        self.node.control.recovery_count = 3
+        self.node.control.state = 'plan'
+        self.node.tick()
+        r = self.spin(h.get_result_async())
+        self.assertEqual(r.status, 6)
+        self.assertEqual(r.result.reason, 'recovery_exhausted')
+        self.assertFalse(r.result.success)
+        self.stopped()
+        h = self.send(self.goal(timeout=.12))
+        self.assertTrue(h.accepted)
+        self.wait_until(lambda: self.node.control.state.startswith('recovery_'))
+        r = self.spin(h.get_result_async())
+        self.assertEqual(r.status, 6)
+        self.assertEqual(r.result.reason, 'timeout')
+        self.stopped()
+
     def test_timeout_aborts_and_stops(self):
         h = self.send(self.goal(timeout=.08))
         r = self.spin(h.get_result_async())
         self.assertEqual(r.status, 6)
         self.assertEqual(r.result.reason, 'timeout')
+        self.stopped()
+
+    def test_pre_selection_falls_back_for_occupied_pre_and_blocked_segment(self):
+        import numpy as np
+        goal = (3., 1., 0.)
+        self.assertIsNotNone(self.node.navigation_route(goal)['pre'])
+        for col, reason in ((48, 'occupied'), (54, 'segment')):
+            grid = OccupancyGrid()
+            grid.header.frame_id = 'map'
+            grid.header.stamp = self.node.get_clock().now().to_msg()
+            grid.info.width = grid.info.height = 200
+            grid.info.resolution = .05
+            grid.info.origin.orientation.w = 1.
+            data = np.zeros((200,200),dtype=np.int8)
+            data[20,col] = 100
+            grid.data = data.ravel().tolist()
+            self.node.on_map(grid)
+            route = self.node.navigation_route(goal)
+            self.assertIsNone(route['pre'])
+            self.assertIn(reason, route['reason'])
+            # Selection never clears any task-map occupancy to make pre fit.
+            self.assertTrue(self.node.occupancy[20,col])
+
+    def test_fine_yaw_feedback_and_cancel_use_original_goal_yaw(self):
+        goal = self.goal(0.)
+        goal.g_yaw = .4
+        handle = self.send(goal)
+        self.wait_until(lambda: self.node.control.state == 'heading_align')
+        self.wait_until(lambda: any(f.stage=='heading_align' for f in self.feedback))
+        self.wait_until(lambda: any(abs(json.loads(c.parameter)['velocity'][2]-.6)<1e-6 for c in self.commands))
+        self.assertAlmostEqual(self.feedback[-1].remaining_yaw,.4,places=5)
+        self.spin(handle.cancel_goal_async())
+        self.assertEqual(self.spin(handle.get_result_async()).status,5)
+        self.stopped()
+
+    def test_fine_position_wait_is_included_in_overall_timeout(self):
+        handle = self.send(self.goal(0.,timeout=.12))
+        self.assertTrue(handle.accepted)
+        result = self.spin(handle.get_result_async())
+        self.assertEqual(result.status,6)
+        self.assertEqual(result.result.reason,'timeout')
         self.stopped()
 
     def test_second_goal_and_rviz_start_rejected_while_action_owns_control(self):
@@ -179,10 +366,14 @@ class ActionTest(unittest.TestCase):
         self.node.begin_navigation((3., 0., 0.))
         self.assertFalse(self.send().accepted)
         self.node.stop(None, Trigger.Response())
-        self.node.goal_pose = (.2, 0., 0.)
+        self.node.goal_pose = (0., 0., 0.)
         self.assertTrue(self.node.start(None, Trigger.Response()).success)
-        self.node.tick()
-        self.assertTrue(self.node.control.reason.startswith('Arrived'))
+        for _ in range(4):
+            self.refresh()
+            self.node.tick()
+            if self.node.control.state.endswith('settle'):
+                self.node.control.until = 0.
+        self.assertEqual(self.node.control.reason, 'Final approach completed')
 
     def test_goal_redraw_aborts_action(self):
         h = self.send()
@@ -208,14 +399,14 @@ class ActionTest(unittest.TestCase):
 
     def test_fixed_transform_used_for_goal_and_terminal_pose(self):
         self.node.action.transform = (1., 2., math.pi/2)
-        self.xy_yaw = (1., 2., math.pi/2)
+        self.xy_yaw = (1., 2.1, math.pi/2)
         self.refresh()
-        h = self.send(self.goal(.2))
+        h = self.send(self.goal(.1))
         r = self.spin(h.get_result_async())
         self.assertEqual(r.status, 4)
-        self.assertAlmostEqual(self.node.control.goal[0], 1.)
-        self.assertAlmostEqual(self.node.control.goal[1], 2.2)
-        self.assertAlmostEqual(r.result.final_pose.pose.position.x, 0.)
+        self.assertAlmostEqual(self.node.control.final_goal[0], 1.)
+        self.assertAlmostEqual(self.node.control.final_goal[1], 2.1)
+        self.assertAlmostEqual(r.result.final_pose.pose.position.x, .1)
         self.assertAlmostEqual(r.result.final_pose.pose.position.y, 0.)
 
     def test_stale_pose_never_reported_as_arrived(self):
@@ -249,7 +440,7 @@ class ActionTest(unittest.TestCase):
             self.node.experiment = recorder
             self.node.control.recorder = ExperimentSTGRecorder(recorder)
             try:
-                h = self.send(self.goal(.3))
+                h = self.send(self.goal(0.))
                 result = self.spin(h.get_result_async())
                 self.assertTrue(result.result.success)
                 recorder.writer.queue.join()
@@ -290,7 +481,7 @@ class ActionTest(unittest.TestCase):
                         rows.append(json.loads(stream.readline()))
                         fields = {p+k: 0. for p in ('s_', 'g_') for k in ('x','y','z','roll','pitch','yaw')}
                         fields.update(FIELD_LIMITS)
-                        fields['g_x'] = .3
+                        fields['g_x'] = 0.
                         sock.sendall(encode(dict(protocol=PROTOCOL, type='navigate',
                             request_id=str(uuid.uuid4()), source_action_id='test-navigation',
                             coordinate_frame=self.node.action.scene_frame,

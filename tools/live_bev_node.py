@@ -174,7 +174,7 @@ class LiveBEV(Node):
         self.create_subscription(PointCloud2, self.cfg['cloud_topic'], self.on_cloud, sensor)
         self.create_subscription(String, '/g1/localization_update', self.on_registration, 10)
         self.create_subscription(PoseWithCovarianceStamped, '/g1/live_bev/initialpose_2d', self.on_arrow, 10)
-        self.create_subscription(PoseStamped, '/g1/live_bev/goal_2d', self.on_goal, 10)
+        self.create_subscription(PoseStamped, '/g1/navigation/goal', self.on_goal, latched)
         self.create_service(Trigger, '/g1/live_bev/start', self.start)
         self.create_service(Trigger, '/g1/live_bev/stop', self.stop)
         self.create_service(Trigger, '/g1/live_bev/reset', self.reset_map)
@@ -250,7 +250,7 @@ class LiveBEV(Node):
                 raise ValueError(f'{topic}: expected one publisher, found {count}')
 
     def on_goal(self, m):
-        # Navigation observes the same goal event and cancels the previous task.
+        # Display-only state from navigation (manual or Action), never a command.
         try:
             if m.header.frame_id != 'map':
                 raise ValueError('Draw the goal in frame map')
@@ -262,7 +262,10 @@ class LiveBEV(Node):
             temporary.write_text(json.dumps(goal, indent=2)+'\n')
             temporary.replace(path)
             if self.goal is None or (self.goal['x'],self.goal['y']) != (goal['x'],goal['y']):
-                self.clear_plan('Goal changed; click Compute FMM + STG macro')
+                # A delayed display update must not delete an active navigation STG.
+                # Manual redraw clears that marker in the navigation input callback.
+                self.plan = None
+                self.plan_message = 'Goal changed; click Compute FMM + STG macro'
             self.goal = goal
             arrow = PoseStamped(); arrow.header = m.header
             arrow.pose.position.x = goal['x']; arrow.pose.position.y = goal['y']

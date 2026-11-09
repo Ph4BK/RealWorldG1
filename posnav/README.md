@@ -109,4 +109,4 @@ docker exec g1-posnav-humble bash /workspace/RealWorldG1/posnav/deploy/install_p
 
 ### ROS 2 Action 与 TCP（2026-11-02）
 
-导航节点同时提供 `/nav/navigate_to`（`nav_interfaces/action/NavigateTo`）。RViz 和 Action 共用控制器，已有任务时拒绝新启动。机载先运行 `bash posnav/deploy/build_nav_interfaces.sh`；全量 `build.sh` 也包含此步骤。可独立启动 StarCo TCP 网桥，详细命令与接口语义见 [G1 Action 接口与 TCP 联调](../docs/G1_Action接口与TCP联调.md)。当前仍为 D1-803 地图，未配置 D3-619 配准；成功半径 0.50 m，暂不精调目标 yaw。
+导航节点同时提供 `/nav/navigate_to`（`nav_interfaces/action/NavigateTo`）。RViz 和 Action 共用控制器，已有任务时拒绝新启动。机载先运行 `bash posnav/deploy/build_nav_interfaces.sh`；全量 `build.sh` 也包含此步骤。可独立启动 StarCo TCP 网桥，详细命令与接口语义见 [G1 Action 接口与 TCP 联调](../docs/G1_Action接口与TCP联调.md)。当前仍为 D1-803 地图，未配置 D3-619 配准；2026-11-09 起执行 pre 与完整末端精调，按一轮流程完成返回 arrived；不承诺请求位置/朝向容差已验收，参数与结果语义见部署文档第 9.16 节。

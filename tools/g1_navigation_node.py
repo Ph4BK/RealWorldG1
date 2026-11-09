@@ -19,7 +19,8 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
 from unitree_api.msg import Request
 from skimage.morphology import binary_dilation, disk
-from g1_navigation_core import Navigation
+from g1_navigation_core import Navigation, velocity_xyz
+from g1_final_approach import PosNav
 from stg_error_recorder import STGErrorRecorder, STGErrorLog
 from experiment_recorder import TrialRecorder, ExperimentSTGRecorder
 from posnav_fmm.planner import plan_snapshot
@@ -39,6 +40,28 @@ def planar(message):
     return (p.x, p.y, math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z)))
 
 
+def recovery_occupancy(occupancy, origin, resolution, pose, radius=.75, near_radius=.30):
+    """Count uninflated occupied cell centers in body-frame quadrants.
+
+    Half-open sectors are front [-45,45), left [45,135), back [135,225),
+    right [225,315). Equal counts are resolved by that same order.
+    """
+    x, y, yaw = pose
+    rows, cols = np.nonzero(occupancy)
+    dx = origin[0] + (cols+.5)*resolution - x
+    dy = origin[1] + (rows+.5)*resolution - y
+    r2 = dx*dx + dy*dy
+    selected = r2 <= radius*radius + 1e-12
+    angle = (np.arctan2(dy[selected], dx[selected])-yaw+math.pi/4) % (2*math.pi)
+    quadrant = angle/(math.pi/2)
+    # Preserve half-open boundaries after translating grid/pose coordinates.
+    nearest = np.rint(quadrant)
+    quadrant = np.where(np.isclose(quadrant, nearest, rtol=0., atol=1e-12), nearest, quadrant)
+    sectors = np.floor(quadrant).astype(int) % 4
+    return dict(near_count=int(np.count_nonzero(r2 <= near_radius*near_radius+1e-12)),
+                sector_counts=np.bincount(sectors, minlength=4).tolist())
+
+
 class NavigationNode(Node):
     def __init__(self, config, record_stg_errors=False, stg_error_dir=None, experiment_dir=None):
         super().__init__('g1_navigation')
@@ -49,12 +72,14 @@ class NavigationNode(Node):
             directory = stg_error_dir or Path(__file__).resolve().parents[1]/'stg_error_results'
             self.error_log = STGErrorLog(directory)
             self.get_logger().info('STG error records: '+str(self.error_log.path))
-        self.control = Navigation(self.plan, self.clear,
-                                  STGErrorRecorder() if record_stg_errors else None)
+        self.control = PosNav(self.plan, self.clear, self.navigation_route,
+                                  STGErrorRecorder() if record_stg_errors else None,
+                                  recovery=self.recovery_options)
         self.experiment = None
         if experiment_dir is not None:
-            parameters = {key: getattr(self.control, key) for key, value in vars(Navigation).items()
-                          if isinstance(value, (int, float))}
+            parameters = {key: getattr(self.control, key) for cls in (Navigation, PosNav)
+                          for key, value in vars(cls).items() if isinstance(value, (int, float))}
+            parameters.pop('goal_tol', None)
             self.experiment = TrialRecorder(experiment_dir, dict(control=parameters, planning=self.cfg))
             self.control.recorder = ExperimentSTGRecorder(self.experiment)
         self.goal = None
@@ -69,6 +94,8 @@ class NavigationNode(Node):
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.commands = self.create_publisher(Request, '/api/sport/request', 1)
         self.status = self.create_publisher(String, '/g1/navigation/status', latched)
+        # Read-only goal state for displays, distinct from the redraw command.
+        self.goal_state = self.create_publisher(PoseStamped, '/g1/navigation/goal', latched)
         self.stg_display = self.create_publisher(Marker, '/g1/live_bev/stg_macro', latched)
         self.create_subscription(PoseStamped, '/g1/live_bev/robot', self.on_pose, 1)
         self.create_subscription(OccupancyGrid, '/g1/bev/task', self.on_map, latched)
@@ -84,11 +111,12 @@ class NavigationNode(Node):
         self.publish_status()
 
     def send(self, velocity):
+        velocity = velocity_xyz(velocity)
         request = Request()
         request.header.identity.id = time.monotonic_ns()
         request.header.identity.api_id = 7105
         request.header.policy.noreply = True
-        request.parameter = json.dumps({'velocity': [velocity[0], 0., velocity[1]],
+        request.parameter = json.dumps({'velocity': list(velocity),
                                         'duration': self.control.duration})
         self.commands.publish(request)
         if self.experiment:
@@ -123,6 +151,32 @@ class NavigationNode(Node):
             self.last_health_time, self.last_health_key = now, key
 
     def flush_recordings(self):
+        # Called only after command publication, including immediate stop paths.
+        while self.control.recovery_events:
+            event, data = self.control.recovery_events.popleft()
+            if event == 'recovery_started':
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.ns = 'stg_macro'
+                marker.id = 0
+                marker.action = Marker.DELETE
+                self.stg_display.publish(marker)
+            if self.experiment:
+                self.experiment.event(event, map_ref=self.snapshot(), **data)
+        while self.control.final_events:
+            event, data = self.control.final_events.popleft()
+            if event == 'fine_approach_started':
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.ns = 'stg_macro'
+                marker.id = 0
+                marker.action = Marker.DELETE
+                self.stg_display.publish(marker)
+            if self.experiment:
+                self.experiment.event(event, map_ref=self.snapshot(), **data)
+            if event == 'fine_approach_completed':
+                self.get_logger().info('Final approach completed: XY error %.4f m, yaw error %.4f rad; position tolerance not checked' %
+                    (data['internal_error_m'], data['final_yaw_error_rad']))
         if self.experiment and self.experiment.writer.error and self.recording_error is None:
             self.recording_error = 'Experiment recording failed: '+self.experiment.writer.error
             self.get_logger().error(self.recording_error)
@@ -146,6 +200,13 @@ class NavigationNode(Node):
             self.goal = self.goal_pose[:2]
             if self.experiment:
                 self.experiment.event('goal_selected', source_stamp_ns=stamp_ns(msg), goal=self.goal_pose)
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.ns = 'stg_macro'
+            marker.id = 0
+            marker.action = Marker.DELETE
+            self.stg_display.publish(marker)
+            self.publish_goal()
         except ValueError as exc:
             self.goal = None
             self.goal_pose = None
@@ -189,6 +250,7 @@ class NavigationNode(Node):
             self.origin = np.array([msg.info.origin.position.x, msg.info.origin.position.y])
             self.resolution = .05
             self.free = ~binary_dilation(self.occupancy, disk(self.cfg['fmm_inflation_cells']))
+            self.control.map_revision = stamp
             if self.experiment:
                 self.record_grid = data.astype(np.int8)
                 p, q = msg.info.origin.position, msg.info.origin.orientation
@@ -203,6 +265,25 @@ class NavigationNode(Node):
     def cell(self, xy):
         col, row = np.floor((np.asarray(xy)-self.origin)/self.resolution).astype(int)
         return (row, col)
+
+    def recovery_options(self, pose):
+        return recovery_occupancy(self.occupancy, self.origin, self.resolution, pose,
+            self.control.recovery_radius, self.control.recovery_near_radius)
+
+    def navigation_route(self, goal):
+        """Use pre only when its cell and the complete pre-to-goal segment are free."""
+        def free_point(point):
+            r, c = self.cell(point)
+            return 0 <= r < self.free.shape[0] and 0 <= c < self.free.shape[1] and self.free[r,c]
+        if not free_point(goal[:2]):
+            raise ValueError('Final goal is outside the map or occupied after obstacle inflation')
+        pre = (goal[0]-self.control.pre_distance*math.cos(goal[2]),
+               goal[1]-self.control.pre_distance*math.sin(goal[2]))
+        if not free_point(pre):
+            return dict(pre=None, reason='Pre is outside the map or occupied after inflation')
+        if not line_is_collision_free(self.cell(pre), self.cell(goal[:2]), self.free):
+            return dict(pre=None, reason='Pre-to-goal segment is blocked')
+        return dict(pre=pre, reason='Pre-to-goal segment is clear')
 
     def clear(self, start, end, limit):
         start, end = np.asarray(start), np.asarray(end)
@@ -230,7 +311,8 @@ class NavigationNode(Node):
         try:
             plan = plan_snapshot(self.occupancy, self.origin, self.resolution, pose, goal,
                 inflation_cells=self.cfg['fmm_inflation_cells'], step_cells=self.cfg['fmm_step_cells'],
-                max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'])
+                max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'],
+                direct_goal_range=self.control.direct_stg_range)
         except Exception as exc:
             if self.experiment:
                 self.experiment.planning(pose, goal, map_ref,
@@ -243,6 +325,7 @@ class NavigationNode(Node):
             self.experiment.planning(pose, goal, map_ref,
                 'selected' if plan.stg_xy is not None else 'no_stg', plan.reason,
                 stg=plan.stg_xy, rollout_rc=plan.rollout_rc,
+                final_stg=getattr(plan, 'final_stg', False),
                 duration_s=time.monotonic()-planning_started)
         if plan.stg_xy is not None:
             marker.action = Marker.ADD
@@ -253,7 +336,7 @@ class NavigationNode(Node):
             marker.scale.x = marker.scale.y = marker.scale.z = .15
             marker.color.r = marker.color.b = marker.color.a = 1.
         self.stg_display.publish(marker)
-        return plan.stg_xy
+        return plan
 
     def start(self, _, response):
         try:
@@ -278,12 +361,24 @@ class NavigationNode(Node):
             raise ValueError(self.recording_error)
         if goal_pose is None:
             raise ValueError('Draw the goal arrow first')
-        self.control.start(goal_pose[:2], time.monotonic())
+        self.control.start(goal_pose, time.monotonic())
         self.goal_pose = tuple(goal_pose)
         self.goal = self.goal_pose[:2]
         if self.experiment:
-            self.experiment.begin(self.goal_pose, self.control.pose, self.pose_source_stamp, self.control.goal_tol)
+            self.experiment.begin(self.goal_pose, self.control.pose, self.pose_source_stamp, None)
             self.experiment.event('initial_task_map', map_ref=self.snapshot())
+        self.publish_goal()
+
+    def publish_goal(self):
+        """Publish the selected/started map goal without feeding the input topic."""
+        x, y, yaw = self.goal_pose
+        msg = PoseStamped()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.pose.position.x, msg.pose.position.y = float(x), float(y)
+        msg.pose.orientation.z = math.sin(yaw/2.)
+        msg.pose.orientation.w = math.cos(yaw/2.)
+        self.goal_state.publish(msg)
 
     def stop(self, _, response):
         if self.experiment:
@@ -313,7 +408,14 @@ class NavigationNode(Node):
     def publish_status(self):
         c = self.control
         status = json.dumps(dict(active=c.active, state=c.state, message=c.paused or c.reason,
-                                 stg=c.stg))
+                                 stg=c.stg, recovery_count=c.recovery_count,
+                                 recovery_limit=c.recovery_limit, planning_failures=c.planning_failures,
+                                 recovery_direction=c.recovery_direction,
+                                 recovery_sector_counts=c.recovery_counts, pre=c.pre,
+                                 coarse_target=c.goal if c.final_goal else None,
+                                 final_goal=c.final_goal, internal_error_m=c.final_error_m,
+                                 final_yaw_error_rad=c.final_yaw_error,
+                                 position_tolerance_checked=False))
         if status != self.last_status:
             self.status.publish(String(data=status))
             self.last_status = status

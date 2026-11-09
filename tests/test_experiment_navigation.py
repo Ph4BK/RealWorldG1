@@ -120,10 +120,16 @@ class NavigationEvidenceTest(unittest.TestCase):
         self.assertTrue(any(e['event']=='start_request' and not e['accepted'] for e in self.events()))
 
     def test_arrival_and_second_goal_have_separate_results(self):
-        self.ready(goal=.2)
-        self.node.tick()
+        self.ready(goal=0.)
+        for _ in range(4):
+            self.node.on_pose(self.pose())
+            self.node.tick()
+            if self.node.control.state.endswith('settle'):
+                self.node.control.until = 0.
         result = self.read('trials/trial_0001/result.json')
         self.assertTrue(result['success'])
+        self.assertFalse(result['position_tolerance_checked'])
+        self.assertEqual(result['completion_basis'], 'single_final_approach_cycle_completed')
         self.assertEqual(result['planning_attempts'], 0)
         self.assertTrue((self.session.path/result['final_map_ref']).exists())
         self.ready(goal=3.)
@@ -156,6 +162,28 @@ class NavigationEvidenceTest(unittest.TestCase):
         self.assertNotEqual(attempts[0]['map_ref'], attempts[1]['map_ref'])
         segment = json.loads((trial/'stg_segments.jsonl').read_text())
         self.assertIn('Stopped by user', segment['anomalies'])
+
+    def test_recovery_logs_lateral_command_and_map_without_fake_stg(self):
+        self.ready()
+        c = self.node.control
+        c.recovery = lambda _: dict(near_count=1, sector_counts=[2, 0, 1, 1])
+        c.plan = Mock(side_effect=GoalUnreachable('near-field blocked'))
+        self.node.tick()
+        self.node.tick()
+        self.assertEqual(c.state, 'recovery_left')
+        rows = self.events()
+        started = next(r for r in rows if r['event']=='recovery_started')
+        self.assertEqual(started['sector_counts'], [2, 0, 1, 1])
+        self.assertEqual(started['velocity'], [0., .5, 0.])
+        self.assertTrue((self.session.path/started['map_ref']).exists())
+        commands = [r['velocity'] for r in rows if r['event']=='command_change']
+        self.assertEqual(commands[-1], [0., .5, 0.])
+        trial = self.session.path/'trials/trial_0001'
+        self.assertEqual((trial/'stg_segments.jsonl').read_text(), '')
+        self.node.cancel('Stopped by user')
+        rows = self.events()
+        self.assertTrue(any(r['event']=='recovery_cancelled' for r in rows))
+        self.assertEqual([r['velocity'] for r in rows if r['event']=='command_change'][-1], [0., 0., 0.])
 
     def test_stale_input_does_not_count_as_planning_attempt(self):
         self.ready()

@@ -113,7 +113,8 @@ class NavigationAction:
             self.event('action_goal_started', requested_goal_scene=run.goal_scene,
                 requested_start_scene=[g.s_x, g.s_y, g.s_yaw], start_policy='record_only_no_localization_reset',
                 requested_pos_tol=g.pos_tol, requested_yaw_tol=g.yaw_tol,
-                effective_pos_tol=self.node.control.goal_tol, final_yaw_control=False,
+                effective_pos_tol=None, position_tolerance_checked=False, final_yaw_control=True,
+                yaw_stop_tol_rad=self.node.control.yaw_stop_tol,
                 timeout_s=g.timeout, max_speed=g.max_speed,
                 map_from_scene_xy_yaw=self.transform)
         except Exception as exc:
@@ -164,7 +165,7 @@ class NavigationAction:
                 return
             if now-run.last_feedback >= .1:
                 fb = NavigateTo.Feedback()
-                fb.stage = n.control.state + (': '+n.control.paused if n.control.paused else '')
+                fb.stage = n.control.feedback_stage()
                 fb.current_pose = self.stamped_pose()
                 x, y, yaw = self.scene_pose(n.control.pose)
                 gx, gy, gyaw = run.goal_scene
@@ -175,11 +176,12 @@ class NavigationAction:
             return
         result = NavigateTo.Result()
         fresh = n.control.pose is not None and now-n.control.pose_time < n.control.pose_timeout
-        arrived = n.control.reason == 'Arrived within 0.50 m' and fresh
+        arrived = n.control.reason == n.control.completion_reason and fresh
         reasons = {'Stopped by user': 'stopped_by_user',
                    'Goal redrawn; press Start Navigation': 'goal_redrawn',
                    'Localization stopped or map reset': 'localization_stopped',
                    'Navigation process stopped': 'shutdown',
+                   'recovery_exhausted': 'recovery_exhausted',
                    'No valid STG; navigation stopped': 'no_stg'}
         reason = run.reason or ('arrived' if arrived else reasons.get(n.control.reason, 'navigation_error'))
         if not fresh:
@@ -196,7 +198,9 @@ class NavigationAction:
         result.elapsed = float(now-run.started)
         self.event('action_result', reason=reason, success=result.success,
                    controller_reason=n.control.reason, action_elapsed_s=result.elapsed,
-                   internal_error_m=result.internal_error)
+                   internal_error_m=result.internal_error,
+                   final_yaw_error_rad=n.control.final_yaw_error,
+                   position_tolerance_checked=False)
         if run.handle.is_cancel_requested:
             result.success = False
             run.handle.canceled()

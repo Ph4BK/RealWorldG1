@@ -19,16 +19,20 @@ class Plan:
     rollout_rc: list
     stopped: bool
     reason: str
+    final_stg: bool = False
 
 
 def plan_snapshot(occupancy, origin, resolution, start_xy, goal_xy, *,
-                  inflation_cells=5, step_cells=10, max_stgs=4, min_step_cells=4):
+                  inflation_cells=5, step_cells=10, max_stgs=4, min_step_cells=4,
+                  direct_goal_range=.50):
     """No yaw input, motion commands or mutation of the source occupancy map."""
     occupied=np.asarray(occupancy,dtype=bool)
     if occupied.ndim!=2 or min(occupied.shape)<3:
         raise ValueError('Invalid occupancy grid')
     if not math.isclose(resolution,.05):
-        raise ValueError('Go2 stop rules require the configured 5 cm grid')
+        raise ValueError('FMM requires the configured 5 cm grid')
+    if not math.isfinite(direct_goal_range) or direct_goal_range < 0:
+        raise ValueError('Invalid direct-goal range')
     if (not all(isinstance(v, (int, np.integer)) for v in
                 (inflation_cells, step_cells, max_stgs, min_step_cells)) or
             inflation_cells<0 or min(step_cells,max_stgs,min_step_cells)<1 or
@@ -57,14 +61,14 @@ def plan_snapshot(occupancy, origin, resolution, start_xy, goal_xy, *,
     planner=FMMPlanner(padded);planner.set_multi_goal(goals)
     distances=planner.fmm_dist[1:-1,1:-1].copy()*resolution
     distances[~reachable[1:-1,1:-1]]=np.inf
-    distance=float(planner.fmm_dist[state])*resolution
-    euclidean=float(np.linalg.norm(np.asarray(state)-target))*resolution
     def result(stg,path,stopped,reason):
         xy=None if stg is None else (float(origin[0]+(stg[1]-1+.5)*resolution),
                                      float(origin[1]+(stg[0]-1+.5)*resolution))
         return Plan(distances,free,start,goal,xy,[(p[0]-1,p[1]-1) for p in path],stopped,reason)
-    if 0<euclidean<1. and distance/euclidean>2.:
-        return result(None,[],True,'Go2 global-goal distance ratio stop')
+    if (np.linalg.norm(np.asarray(start_xy)-goal_xy) <= direct_goal_range+1e-12 and
+            line_is_collision_free(start,goal,free)):
+        return Plan(distances,free,start,goal,tuple(map(float,goal_xy)),[start,goal],False,
+                    'Exact goal selected as final STG',final_stg=True)
     def next_stg(position, radius):
         row,col,replan,stop=planner.get_short_term_goal(position,radius)
         return (float(row),float(col)),replan,stop

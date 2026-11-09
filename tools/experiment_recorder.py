@@ -158,8 +158,14 @@ command_change 只记录指令变化，非完整 50 Hz 指令流，也不是实�
 annotations.jsonl 初始为空，人工可填 timestamp、trial_id、干扰类型、起止、描述、视频索引。
 若后补人工说明，需重新生成 checksums.sha256，或将说明作为外部补充交付。
 
-当前判据仅为定位输出下 XY 距目标 <= 0.50 m；不实现末端精调/最终 yaw 对准。
-result.success 仅表示上述程序判据，不代表独立物理真值或正式验收结论。
+当前流程为 STG 到 pre、位置接近、最终 yaw 对准和停止等待。
+result.success 表示一轮流程完成，不承诺请求 pos_tol；停止等待后的 XY/yaw 误差单独记录。
+末端位置停止条件为 remaining<=coast；remaining 是沿位置阶段开始时实际位置指向目标
+的固定方向计算的有符号投影剩余距离。事件保存方向及投影距离，L2 误差仍单独记录。
+位置阶段 remaining<=fine_no_turn_distance 时停止转向修正，继续前进至投影停止条件；
+该阈值独立于 coast，均保存到 navigation_parameters.json。受阻处理仍优先于前进。
+yaw 进入停止阈值后等待并记录，不自动反复补位或补转。
+不代表独立物理真值或正式验收结论。
 等待障碍/等待输入/规划重试不是任务失败。未知、不完整记录不自动算成功。
 recording_complete 指正常收尾且未发现写盘/队列错误，不是 DDS 零丢包保证。
 强杀或断电时 session/result 可能保留未完成状态；不得推断成功。
@@ -183,14 +189,14 @@ class ExperimentSession:
                          monotonic_origin=self.clock.origin, status='initializing',
                          recording_complete=False, original_map_dir=str(map_dir.resolve()),
                          original_config=str(config.resolve()), units=dict(position='m', angle='rad'),
-                         frame_id='map', final_yaw_control=False)
+                         frame_id='map', final_yaw_control=True, position_tolerance_checked=False)
         write_json(self.path / 'session.json', self.info)
         shutil.copytree(map_dir, self.path / 'assets/map')
         destination = self.path / 'assets/config/live_bev.yaml'
         destination.parent.mkdir(parents=True)
         shutil.copy2(config, destination)
         files = ['tools/g1_navigation_core.py', 'tools/g1_navigation_node.py', 'tools/g1_action_server.py',
-                 'tools/stg_error_recorder.py', 'tools/experiment_recorder.py',
+                 'tools/stg_error_recorder.py', 'tools/experiment_recorder.py', 'tools/g1_final_approach.py',
                  'tools/live_bev_core.py', 'tools/live_bev_node.py', 'tools/g1_live_desktop.py',
                  'tools/run_g1_live_bev.sh', 'tools/run_live_bev.sh',
                  'posnav/deploy/start_desktop.sh', 'posnav/deploy/env.sh',
@@ -291,7 +297,8 @@ class TrialRecorder:
         self.started = self.stamp(source_stamp_ns)
         self.writer.json(self.relative('task.json'), dict(**self.started, goal=goal,
             initial_pose=pose, frame_id='map', goal_tolerance_m=goal_tol,
-            final_yaw_control=False, success_basis='localization_xy_distance'))
+            final_yaw_control=True, position_tolerance_checked=False,
+            success_basis='single_final_approach_cycle_completed'))
         self.writer.json(self.relative('result.json'), dict(**self.started, outcome='running',
             success=None, recording_complete=False))
         self.writer.submit('touch', self.relative('annotations.jsonl'), None)
@@ -312,14 +319,14 @@ class TrialRecorder:
                 **self.stamp(key), grid=metadata, data_file=Path(relative).name))
         return self.map_refs[key]
 
-    def planning(self, pose, goal, map_ref, outcome, reason, stg=None, rollout_rc=None, duration_s=None):
+    def planning(self, pose, goal, map_ref, outcome, reason, stg=None, rollout_rc=None, duration_s=None, final_stg=False):
         if not self.trial_id:
             return
         self.attempt += 1
         self.writer.line(self.relative('planning.jsonl'), dict(**self.stamp(),
             attempt_id=self.attempt, start_xy=pose, goal_xy=goal, map_ref=map_ref,
             outcome=outcome, reason=reason, selected_stg=stg, rollout_rc=rollout_rc,
-            duration_s=duration_s))
+            duration_s=duration_s, final_stg=final_stg))
 
     def pose(self, pose, source_stamp_ns, state):
         self.latest_pose_stamp = source_stamp_ns
@@ -335,14 +342,17 @@ class TrialRecorder:
             remaining_dist_m=math.hypot(pose[0]-self.goal[0], pose[1]-self.goal[1])))
 
     def command(self, velocity, duration):
+        # Legacy callers use (vx, wz); navigation can now also command lateral motion.
+        from g1_navigation_core import velocity_xyz
+        velocity = velocity_xyz(velocity)
         if tuple(velocity) != self.last_command:
-            self.event('command_change', velocity=[velocity[0], 0., velocity[1]], duration_s=duration)
+            self.event('command_change', velocity=list(velocity), duration_s=duration)
             self.last_command = tuple(velocity)
 
     def finish(self, reason, pose, pose_age_s, input_problem, map_ref):
         if not self.trial_id:
             return
-        success = reason == 'Arrived within 0.50 m'
+        success = reason == 'Final approach completed'
         outcome = ('arrived' if success else 'cancelled' if reason in (
             'Stopped by user', 'Goal redrawn; press Start Navigation',
             'Localization stopped or map reset') else 'interrupted' if reason ==
@@ -351,6 +361,8 @@ class TrialRecorder:
             final_pose=pose, pose_age_s=pose_age_s, input_problem=input_problem,
             final_map_ref=map_ref, elapsed_task_s=time.monotonic()-self.clock.origin-self.started['elapsed_s'],
             internal_error_m=None if pose is None else math.hypot(pose[0]-self.goal[0], pose[1]-self.goal[1]),
+            final_yaw_error_rad=None if pose is None else math.atan2(math.sin(self.goal[2]-pose[2]),math.cos(self.goal[2]-pose[2])),
+            position_tolerance_checked=False, completion_basis='single_final_approach_cycle_completed',
             planning_attempts=self.attempt, stg_count=self.stg_count,
             obstacle_checks_failed=self.obstacles, pose_samples=self.pose_samples,
             sampled_path_length_m=self.path_length, recording_complete=not bool(self.writer.error))

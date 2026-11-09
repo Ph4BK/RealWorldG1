@@ -171,6 +171,8 @@ class NavigationNodeTest(unittest.TestCase):
         self.assertGreater(r.header.identity.id, 0)
         self.node.send((0., -1.))
         self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0., 0., -1.])
+        self.node.send((0., -.5, 0.))
+        self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0., -.5, 0.])
         self.assertAlmostEqual(self.node.control.control_hz, 50.)
 
     def test_pose_source_stamp_is_not_checked(self):
@@ -304,7 +306,7 @@ class NavigationNodeTest(unittest.TestCase):
         self.node.tick()
         self.assertEqual(len(self.commands), count)
 
-    def test_inflated_start_waits_and_recovers_when_map_clears(self):
+    def test_inflated_start_prepares_recovery_and_skips_it_when_map_clears(self):
         self.node.on_goal(self.pose(3., 0.))
         self.node.on_pose(self.pose())
         m = self.grid()
@@ -315,14 +317,16 @@ class NavigationNodeTest(unittest.TestCase):
         self.assertTrue(self.node.start(None, Trigger.Response()).success)
         self.node.tick()
         c = self.node.control
-        self.assertEqual(c.state, 'plan_wait')
+        self.assertEqual(c.state, 'recovery_prepare')
         self.assertIsNone(c.stg)
-        self.assertIn('unreachable', c.reason)
+        self.assertIn('Preparing recovery', c.reason)
         self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0.,0.,0.])
-        with patch('g1_navigation_node.time.monotonic', return_value=c.until):
-            self.node.on_map(self.grid())
-            self.node.on_pose(self.pose())
-            self.node.tick()
+        self.node.on_map(self.grid())
+        self.node.on_pose(self.pose())
+        self.node.tick()
+        self.assertEqual(c.state, 'plan')
+        self.assertEqual(c.recovery_count, 0)
+        self.node.tick()
         self.assertEqual(c.state, 'walk_start')
         self.assertIsNotNone(c.stg)
 

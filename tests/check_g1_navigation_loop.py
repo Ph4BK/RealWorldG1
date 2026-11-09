@@ -32,13 +32,13 @@ def main():
     poses=plant.create_publisher(PoseStamped,'/g1/live_bev/robot',1)
     goals=plant.create_publisher(PoseStamped,'/g1/live_bev/goal_2d',10)
     start=plant.create_client(Trigger,'/g1/navigation/start')
-    xy=[0.,0.];yaw=[-.8];command=[0.,0.,0.];received=[];stgs=set();states=set()
+    xy=[0.,0.];yaw=[-.8];command=[0.,0.,0.,0.];received=[];stgs=set();states=set()
     def receive(msg):
         data=json.loads(msg.parameter)
         assert msg.header.identity.api_id==7105 and msg.header.policy.noreply
         assert data['duration']==.1
         now=time.monotonic();received.append(now)
-        command[:]=[data['velocity'][0],data['velocity'][2],now+data['duration']]
+        command[:]=data['velocity']+[now+data['duration']]
     plant.create_subscription(Request,'/api/sport/request',receive,1)
     def status(msg):
         data=json.loads(msg.data);states.add(data['state'])
@@ -53,10 +53,10 @@ def main():
     try:
         while time.monotonic()-begun<25.:
             now=time.monotonic();dt=now-previous;previous=now
-            if now<command[2]:
-                xy[0]+=command[0]*math.cos(yaw[0])*dt
-                xy[1]+=command[0]*math.sin(yaw[0])*dt
-                yaw[0]+=command[1]*dt
+            if now<command[3]:
+                xy[0]+=(command[0]*math.cos(yaw[0])-command[1]*math.sin(yaw[0]))*dt
+                xy[1]+=(command[0]*math.sin(yaw[0])+command[1]*math.cos(yaw[0]))*dt
+                yaw[0]+=command[2]*dt
             if now-last_frame>=.1:
                 p=PoseStamped();p.header.frame_id='map';p.header.stamp=plant.get_clock().now().to_msg()
                 p.pose.position.x,p.pose.position.y=xy
@@ -75,16 +75,17 @@ def main():
                     break
         assert requested is not None and requested.done()
         assert not nav.control.active,nav.control.state
-        assert nav.control.reason.startswith('Arrived'),nav.control.reason
-        assert math.hypot(xy[0]-2.8,xy[1])<=.5
+        assert nav.control.reason=='Final approach completed',nav.control.reason
+        assert math.hypot(xy[0]-2.8,xy[1])<=nav.control.coast+.02
         assert len(stgs)>=2,stgs
         assert {'turn','turn_settle','walk','walk_settle'}.issubset(states),states
+        assert {'fine_approach','fine_position_settle','heading_align','fine_yaw_settle'}.issubset(states),states
         periods=np.diff(received)
         median=float(np.median(periods))
         assert .015<median<.025,median
         # Final zero has to reach the simulated robot too.
         for _ in range(20):executor.spin_once(timeout_sec=.005)
-        assert command[:2]==[0.,0.],command
+        assert command[:3]==[0.,0.,0.],command
         print(json.dumps(dict(result='passed',commands=len(received),stgs=len(stgs),
                               median_command_period_s=median,final_xy=xy,elapsed_s=time.monotonic()-begun)))
     finally:

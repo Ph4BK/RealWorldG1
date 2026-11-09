@@ -4,6 +4,21 @@
 原始 bag 另行交接；详细运行日志、逐帧性能采样和中间点云不纳入普通 Git，
 已有本地文件继续保留。性能摘要是当次测量记录，仅凭摘要无法重新计算全部指标。
 
+## PosNav 现场联调与脱困
+
+[`posnav_integration_20261109/REPORT.md`](posnav_integration_20261109/REPORT.md) 归档用户提供的
+两次成功真机任务终端状态输出。第二次出现一次向前脱困，停止等待后恢复 STG 导航并报告到达，
+支持前进脱困的初步真机功能验证。2026-11-09 为整理日期，实际实验时间未提供。
+原文所有状态字符串均被截断，缺少时间戳和 Action 请求标识；结论范围及联调来源说明见报告。
+报告、`summary.json` 和校验清单随 Git 保留，原始 `navigation_status_terminal.txt` 仅留本地，分享时需另行附带。
+
+## PosNav 末端精调与最终位姿误差
+
+[`posnav_final_approach_20261109/REPORT.md`](posnav_final_approach_20261109/REPORT.md)
+记录实验包 `20261109T151158Z` 的 8 次完整任务。以最终 yaw 停止等待后的位姿计算
+L2 及最短 yaw 角差，保留逐次 CSV、统计摘要、配图和复现脚本。
+原始包位于 `../posnav_experiments/20261109T151158Z/`，仅留本地。
+
 ## 重定位回放
 
 `relocalization_1/`、`relocalization_2/`、`relocalization_3/` 各保留：

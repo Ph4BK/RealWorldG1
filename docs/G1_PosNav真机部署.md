@@ -8,6 +8,11 @@
 
 本阶段完成静态地图加载、人工粗略初始位姿、机载重定位、实时局部 BEV 构建、任务地图更新、目标位姿标注，以及手动 FMM 距离场计算与 STG macro 选点预览。用户已在 G1 真机确认地图替换与 STG macro 选点效果合理。2026-10-13 已按第 9 节实现闭环运控：界面新增 Start Navigation / Stop Navigation，由用户显式启动后发送 G1 速度指令。2026-10-16 用户反馈已完成连续 STG 闭环导航真机测试，确认局部地图更新、STG 自动切换、行人阻挡后的障碍响应与重规划，以及最终进入目标 0.50 m 范围。当前状态为：**已完成初版连续导航真机功能验收；量化精度与重复性评估、末端位姿精调待完成。**离线验证与部署记录见第 9.8 节，真机实验结果及验收范围见第 9.9 节。
 
+**2026-11-09 末端精调更新：**当前生产导航采用第 9.16 节完整流程：STG 到 pre、
+位置接近、最终 yaw 对准与停止等待；不再以进入最终目标 0.50 m 范围直接成功。
+下文较早的 0.50 m 验收记录是历史结果。当前 `arrived` 表示一轮末端流程完成，
+不承诺请求的 `pos_tol`；停止等待后的 XY/yaw 误差供真机实验评估。
+
 ## 2. 正式静态地图
 
 本地地图包：`RealWorldG1/maps/full_lab_v1/`。
@@ -212,9 +217,36 @@ ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:6081:127.0.0.1:6081 unitree@192.
 
 <http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale>
 
-保持机器人静止 → 画实际初始位姿箭头 → 点击 Start → 等待定位有效、窗口达到 10/10、状态 Updating → 遥控行走观察局部覆盖效果。运行过程中修改初始位姿需先 Stop。
+保持机器人静止 → 画实际初始位姿箭头 → 点击 **Start Live Localization + BEV** 启动定位 → 等待定位有效、窗口达到 **10/10**、状态 **Updating**。这里启动的是定位，不是 Start Navigation。运行过程中修改初始位姿需先停止定位。
 
-保持 SSH 终端打开；Ctrl+C 或关闭 RViz 结束桌面及所属定位会话，外部 FAST-LIO 继续运行。当前只允许一套桌面会话，换电脑时先关闭原会话。电脑本地 6081 已占用会导致 SSH 转发失败；G1 真有其他监听服务时桌面也会拒绝启动。端口检查已允许正常的 TIME_WAIT 回收状态，不会据此误报占用。
+上述桌面入口同时启动导航节点和 `/nav/navigate_to` Action Server，导航默认空闲。定位就绪后，按使用方式继续：
+
+- **独立开发、使用 RViz 导航：不需要启动 TCP 网桥。** 可以遥控行走观察局部地图更新；需要自动导航时，在 RViz 画目标后点击 **Start Navigation**，点击 **Stop Navigation** 停止任务。
+- **与陈梓昕的任务规划客户端通过 TCP 联调：需要额外启动网桥。** 客户端只连接已有服务，不会启动 FAST-LIO、PosNav 或网桥。网桥也不会拉起导航节点。客户端可以提前打开，但应在定位、地图和网桥就绪后再发送目标。
+
+联调时，若网桥尚未运行，另开电脑终端，依次进入 G1 宿主机和 PosNav 容器：
+
+```bash
+ssh unitree@192.168.123.164
+docker exec -it g1-posnav-humble bash
+```
+
+然后在 **G1 容器内**执行并保留该终端：
+
+```bash
+cd /workspace/RealWorldG1
+bash posnav/deploy/run_tcp_bridge.sh --allow-motion
+```
+
+已有网桥时不要重复启动。`--allow-motion` 允许网桥转发导航任务；不加时仅允许连接检查，
+不转发运动任务。启动网桥本身不会发送目标或使机器人运动。
+
+陈梓昕的客户端连接 `192.168.123.164:8888`，使用已配置的共享口令，选择并发送目标。
+Action 目标被接受后导航自动执行，**不需要再点击 RViz 的 Start Navigation**。
+执行期间不要重画 RViz 目标，重画会取消当前任务；需要停止时仍可使用 Stop Navigation。
+接口、口令和坐标约定见 [G1 Action 接口与 TCP 联调](G1_Action接口与TCP联调.md)。
+
+保持桌面启动的 SSH 终端打开；Ctrl+C 或关闭 RViz 会结束桌面、导航节点及所属定位会话，外部 FAST-LIO 继续运行。TCP 联调期间还需保持网桥终端运行。浏览器访问 6081 仅连接已有桌面，不启动导航节点。当前只允许一套桌面会话，换电脑时先关闭原会话。电脑本地 6081 已占用会导致 SSH 转发失败；G1 真有其他监听服务时桌面也会拒绝启动。端口检查已允许正常的 TIME_WAIT 回收状态，不会据此误报占用。
 
 ## 7. 数据保存与验证
 
@@ -389,6 +421,8 @@ remaining = dot(G - P, u)
 
 ### 9.5 最终目标成功判据
 
+本节为历史 0.50 m 版本；2026-11-09 起当前生产末端完成规则见第 9.16 节。
+
 最终目标 XY 为 `F`，使用二维欧氏距离 `norm(F - P) <= goal_xy_tol` 判断，与当前 STG 的投影完成判据分开。
 
 前进中一旦进入最终目标 **0.50 m** 范围，即发送零速度并等待，无需继续走完当前 STG；停稳后再次检查，仍满足条件才返回成功，否则重新规划。目标 yaw 不影响这一判断。
@@ -396,6 +430,8 @@ remaining = dot(G - P, u)
 0.50 m 恰好等于当前 STG 的基本步长，但二者是独立参数；STG 回退或接近目标时可能短于基本步长。现有 FMM 的距离停止、距离比停止或“未返回 STG”不能直接当作本版任务成功，必须独立检查最终目标欧氏距离；未达标且无法获得有效 STG 时保持停止并报告规划状态。
 
 ### 9.6 中断与实验顺序
+
+2026-11-09 增加近场脱困后，下述规划等待在满足条件时可进入第 9.15 节的定时平移脱困；其余正常 STG 运控沿用原实现。
 
 **2026-10-13 用户确认的暂停、恢复和终止规则：**
 
@@ -646,3 +682,190 @@ RealWorldG1/tools/run_g1_live_bev.sh --record-experiment --record-stg-errors
 机载进一步在独立目录、`ROS_DOMAIN_ID=149`、`ROS_LOCALHOST_ONLY=1` 下通过 **146 项测试**：记录器 8、日志导航回调 7、原真实 ROS 导航节点 22（含 Unitree 消息 DDS 序列化）、定位/BEV 节点 16、导航状态机 32、STG 记录 46、FMM 15。故障注入测试中的 disk full 输出为预期。完整入口还以 `--headless --record-experiment --record-stg-errors` 启动并正常退出，无导航目标、无运动指令；会话 `recording_complete=true`、任务数 0、36 个交付文件 SHA-256 全部核验通过。测试结果包保留在隔离测试目录，不混入正式实验数据。
 
 同步前校验机载旧文件 SHA-256，原文件及部署清单备份到机载 `RealWorldG1/.cache/experiment_recording_backups/` 的独立目录；只替换本功能涉及的脚本、测试和文档。固定的导航状态机、地图和控制参数未改变。
+
+
+### 9.15 近场受困后的定时平移脱困（2026-11-09）
+
+本节规定 2026-11-09 新增的脱困行为，已同步机载；程序验证与真机边界见本节末。
+正常导航仍相对于原目标生成 STG，最终成功半径仍为 0.50 m；本功能不包含 pre 或末端精调。
+
+**输入与方向选择：**近场受困的空间条件为：以当前导航 IMU 参考点 XY 为圆心，
+未膨胀任务图中半径 **0.30 m** 内至少一个占据格。该条件是脱困启发式，不判定占据一定是噪声。
+FAST-LIO 的 blind 是以雷达为原点的三维过滤范围，与此二维判断不完全等价。
+按栅格中心坐标统计，边界半径包含在内。
+
+在同一份未膨胀任务图上统计半径 **0.75 m** 内的占据格，按当前机头方向划分
+前 `[-45°,45°)`、左 `[45°,135°)`、后 `[135°,225°)`、右 `[225°,315°)` 四个扇区。
+仅按格数最少选择；数量相同时按前、左、后、右顺序。所有扇区都拥挤时仍选最少者，
+不使用净空、历史轨迹或原膨胀通行检查否决该动作，不清除任务图中的占据。
+开始发送动作前再检查一次输入和近场占据，已清除则不计脱困次数，返回正常规划。
+
+**触发与计数：**
+
+- `GoalUnreachable` 且满足近场条件：直接准备脱困，不要求先重试三次。
+- `NoVisibleSTG` 等可重试规划错误、或选定 STG 后整段连线被阻断：在不同源时间戳的有效任务图上连续失败 **3 次**，并满足近场条件时准备脱困。同一地图反复规划不重复计数；输入失效不计数。正常成功选出且通过整段通行检查的 STG 清除规划失败计数。
+- 无近场占据时保留原零速度等待与 1 s 规划重试。目标越界、目标落入膨胀障碍、配置错误及规划器正常停止后返回无 STG，仍沿原错误/停止逻辑，不当成脱困请求。
+- **连续脱困最多 3 次**，从首次发送本次非零脱困速度时计数。仅选出 STG 不清零；正常完成一段有前进指令、未经历输入失效或障碍等待的 STG，并结束前进等待后清零。未前进的小段、异常或重新规划不清零。新任务从零计数。
+- 第三次脱困结束后仍尝试正常规划；若再次满足脱困触发条件，则发送零速度、结束任务，原因为 `recovery_exhausted`，不会执行第四次。
+
+**动作与交接：**固定速度幅值 **0.50 m/s**，持续 **1.0 s**。前、后分别为
+`[+0.5,0,0]`、`[-0.5,0,0]`，左、右分别为 `[0,+0.5,0]`、`[0,-0.5,0]`。
+所有分量按 `[vx,vy,wz]`、机体系定义；`wz=0` 不主动旋转，也不闭环保持 yaw。
+沿用 50 Hz 刷新、每条有效期 0.10 s，不依赖距离反馈提前完成；方向选定后本次不再重选。
+到 1.0 s 的首个控制周期主动发零速度，等待 `walk_settle=0.50 s`，并等待至少一份
+停止指令之后接收的更新任务图，再从当前实际位姿重新规划原目标。
+0.50 s 是固定等待，不是已测得的机身静止证明；0.50 m 名义行程不代表实际位移或制动距离。
+脱困过程中进入最终目标半径也先完成定时动作和停止等待，再按正常目标判据检查。
+
+脱困时位姿或地图失效：立即零速度，中止本次脉冲并进入停止等待，已开始的次数保留；
+输入恢复、等待完成且新地图就绪后重新规划，不续跑剩余运动时间。准备阶段输入失效则不计次数。
+Action 取消、RViz Stop/重画目标、定位停止及整体任务超时均保持有效。
+本功能由原导航节点统一发指令，不启动第二个运控进程。
+
+**状态与证据：**状态为 `recovery_prepare`、`recovery_forward/left/backward/right`、
+`recovery_settle`；`/g1/navigation/status` 增加 `recovery_count`、`recovery_limit`、
+`planning_failures`、`recovery_direction`、`recovery_sector_counts`（顺序前左后右）。
+Action Feedback 的 `stage` 示例为 `recovery_left (1/3)`，暂停仍附输入问题；
+继续反馈到原最终目标的距离/yaw。脱困不是任务终态；次数耗尽时 Action abort，
+`success=false, reason=recovery_exhausted`。TCP 网桥直接转发，不改 `.action` 定义。
+
+开启完整实验记录时，记录 `recovery_started`、`recovery_motion_stopped`、
+`recovery_counter_reset`、`recovery_cancelled`、`recovery_exhausted` 事件，包含相应方向、
+计数、扇区数量、触发原因、速度、位姿和地图引用。实际指令变化保存完整 `[vx,vy,wz]`，
+脱困不虚构 STG 或正常 STG 误差样本。恢复后重新选定的 STG 按原规则另记。
+新增核心回归位于 `tests/test_g1_recovery.py`，打包入口已包含此文件。
+
+
+**实现与部署验证（2026-11-09）：**本地 ROS Jazzy / Fast DDS 隔离环境通过 **157 项**测试；
+机载 Humble / CycloneDDS 独立临时副本在 `ROS_DOMAIN_ID=163`、`ROS_LOCALHOST_ONLY=1`
+下通过 **179 项**测试，其中新增脱困核心 15 项、扇区/Action 3 项、实验日志 1 项，
+另验证扩展后的真实 Unitree 消息发布和原有回归。磁盘满日志来自预期故障注入。
+Action 与实验集成测试将运动出口替换为内存；真实 Unitree 消息测试限定在隔离域。
+所有测试均未向正式机器人控制域发布指令，未进行实际平移或现场 GUI 验收。
+
+同步前核对正式旧文件与本地上一部署版本一致；本次替换 11 个文件，含新增的脱困测试。
+原文件及两份清单备份到机载
+`RealWorldG1/.cache/recovery_backups/recovery_deployment_20261109T081548Z/`，
+部署记录在 `RealWorldG1/.cache/recovery_deployment_20261109T081548Z/`。
+两份部署清单按原覆盖范围更新，并纳入新增测试；源码、测试和文档按 SHA-256 核验。
+同步时正式导航、定位、网桥与 FAST-LIO 均未运行；只启动空闲 PosNav 容器用于验证和同步。
+下次按第 6 节启动即加载本功能，无需重新编译 Action 接口或 RViz。
+实际脱困成功率、横移偏航及停后余动仍待现场实验确认。
+
+
+### 9.16 pre 与完整末端精调（2026-11-09）
+
+实现入口为 `tools/g1_final_approach.py` 的 `PosNav`，复用原 `Navigation` STG 运控与脱困。
+生产节点始终传入原始目标 `(x,y,yaw)`；低级 `Navigation` 类的历史 0.50 m 判据仅供
+既有 STG 单元测试使用，不参与当前生产 PosNav。正式参数从 `PosNav` 和 `Navigation`
+导出到实验配置；本节的新参数位于 `PosNav` 类中，不另设 k_yaw。
+
+| 参数 | 当前值 |
+|---|---:|
+| pre 距 goal | 0.60 m，沿目标 yaw 的反方向 |
+| 直接选取最后一个 STG 的距离 | 到粗导航目标二维距离 ≤ 0.50 m |
+| 普通/最后 STG 速度及提前量 | 0.50 m/s、epsilon=0.15 m |
+| 末端前进速度 fine_speed | 0.25 m/s（2026-11-09，由 0.15 经 0.20 调整） |
+| coast | 0 m，保留参数，用于有符号投影剩余距离停止判据 |
+| 位置阶段停止转向阈值 fine_no_turn_distance | 0.15 m，按同一固定方向的投影剩余距离判断 |
+| drive_align / yaw_stop_tol | 均为 0.10 rad，两个独立名称 |
+| 共用角速度比例增益 k_ang | 1.5 |
+| 共用 wz_min / wz_max | 0.15 / 1.0 rad/s |
+| 位置停止 / 最终 yaw 停止等待 | 0.50 / 0.75 s |
+| 控制周期 / 单条有效期 | 50 Hz / 0.10 s |
+
+**粗导航与 pre：**先检查最终目标位于地图内且膨胀后未占据。计算
+`pre=goal_xy-0.60*[cos(goal_yaw),sin(goal_yaw)]`；pre 越界、被膨胀障碍占据或
+pre→goal 整段不通时，使用原 goal 作为粗导航目标。原始最终目标和红色箭头始终保留，
+状态额外给出 `pre`、`coarse_target`、`final_goal`。若已在 goal 的 coast 范围内，
+直接进入末端位置停止流程，不为访问 pre 而离开目标。
+
+使用 pre 时，所有普通 STG 相对于 pre 生成。距离 pre ≤0.50 m 且整段直线可通行时，
+返回 pre 的原始精确 XY（不取栅格中心）作为最后 STG；否则继续原 FMM/缩步逻辑。
+FMM 中固定 0.25 m 停止条件已去除；同时去除会在目标近处绕障时返回无 STG 的
+旧距离比停止条件，使其能继续规划绕行。目标/起点占据与整段通行检查仍生效。
+最后 STG 明确标记，沿用原 epsilon=0.15 m 的投影停止条件，结束 0.50 s 等待后
+直接交接末端控制，不在 goal 的 0.20 m 外再追加 STG，不重新规划同一 pre 循环。
+最后 STG 不保证实际停在 pre 坐标上，后续控制使用最新实际位姿。
+
+粗规划时 pre 被动态更新的障碍占据或末段不再通行，会回退到 goal；本任务回退后不
+反复重新引入 pre。无 pre 时，距 goal ≤0.50 m 且直线可通行即交接末端控制；否则
+继续 STG。持续末端受阻回粗导航时会重新检查已有 pre 的可用性。
+
+**位置接近：**进入位置阶段时，以当时实际位置 p0 指向原始 goal 的方向固定为
+`u=(goal_xy-p0)/norm(goal_xy-p0)`，不使用机身 yaw 或名义 pre→goal 方向。
+每周期计算有符号投影剩余距离 `remaining=dot(goal_xy-current_xy,u)`，以及
+`alpha=wrap(atan2(goal_y-y,goal_x-x)-yaw)`。按优先级执行：
+
+1. `remaining<=coast`：立即零速度，结束位置接近并等待 0.50 s，不再根据 alpha 转向。coast=0 时，到达或越过目标在固定方向上的终止线即可触发；有横向偏差时不要求 XY 精确重合。若阶段开始位置已与目标重合，直接停止等待，避免除零。
+2. 尚未到停止距离且到 goal 整段被阻断：零速度等待 2 s，恢复通行则继续末端位置接近；仍受阻则回粗导航重规划，保持原最终目标和脱困计数。
+3. `remaining<=fine_no_turn_distance`：`vx=fine_speed,vy=wz=0`，沿当前机身朝向继续走，不根据 alpha 转向或禁止前进。阈值独立于 coast；每周期按投影剩余距离判断。
+4. 其余情况下，`abs(alpha)>drive_align`：`vx=vy=0`，原地转向，`wz=sign(alpha)*clip(k_ang*abs(alpha),wz_min,wz_max)`。
+5. 其余情况下，`abs(alpha)<=drive_align`：`vx=fine_speed,vy=0`，`wz=clip(k_ang*alpha,-wz_max,wz_max)`，不抬升小转速，允许边走边转。
+
+位姿输入短暂失效或末端受阻等待恢复时保留投影方向；受阻后回粗导航、再次进入位置
+阶段时按新的实际位置重新确定方向。实验事件 fine_approach_started 保存 position_direction；
+fine_position_stop 与 fine_position_settled 增加 projected_remaining_m。
+原 distance_m / internal_error_m 仍为二维 L2 距离，便于独立观察横向误差。
+
+**最终 yaw：**位置停止等待结束后保存实际位姿/误差，然后进入 heading_align。
+使用最新 `e_yaw=wrap(goal_yaw-yaw)`，不再使用目标点方位 alpha；
+`abs(e_yaw)>yaw_stop_tol` 时以相同的 k_ang/wz_min/wz_max 原地转向，
+否则零速度，等待 0.75 s，记录最终位姿和 XY/yaw 误差并结束本轮流程。
+不增加左右停止提前角，不基于 pos_tol 重新补位置，也不根据停后余转再次补转。
+输入失效时任何末端阶段均输出零速度并保持阶段，恢复有效后按最新位姿继续；
+Action 取消、RViz Stop/重画目标、定位停止和整体超时均覆盖末端阶段。
+
+**结果与记录：**状态新增 `fine_approach`、`fine_obstacle`、`fine_position_settle`、
+`heading_align`、`fine_yaw_settle`，Action Feedback 和 TCP 直接转发上述阶段。
+结束消息为 `Final approach completed`；为兼容现有客户端，Action 仍返回 status 4、
+`success=true,reason=arrived`，此时的语义为“一轮末端控制与停止等待完成”。
+**并不保证请求 pos_tol/yaw_tol 达标**，请求容差仍仅记录；客户端不能继续把有效规则写成
+“XY≤0.50 m且不控制 yaw”，也不能改写为“请求的 5 cm 已验收”。正式容差待真机实验和上层协商。
+`internal_error` 和 `final_pose` 返回真实定位估计，最终 yaw 可从 final_pose 与请求 yaw 计算。
+`/g1/navigation/status` 给出最终 `internal_error_m`、`final_yaw_error_rad` 和
+`position_tolerance_checked=false`；组件日志也输出两项误差。
+
+启用 `--record-experiment` 时保存 route/pre 选择、fine 起始、位置停止与等待结束、
+yaw 停止与等待结束、受阻重规划及中断事件，均带位姿和地图引用。
+任务元数据 `final_yaw_control=true`、`goal_tolerance_m=null`、
+`success_basis=single_final_approach_cycle_completed`；结果额外包含最终 yaw 误差。
+历史实验包不回写。仅记录实际 STG，不将末端移动虚构成 STG 到达误差样本。
+新增核心测试为 `tests/test_g1_final_approach.py`，打包器及实验源码快照已包含新控制器。
+
+**实现与机载同步验证（2026-11-09）：**本地隔离环境通过 178 项测试；机载 Humble /
+CycloneDDS 临时独立副本在 `ROS_DOMAIN_ID=167`、`ROS_LOCALHOST_ONLY=1` 下通过
+**200 项测试**，覆盖新增末端核心 16 项、精确终点 STG/绕障/纯计算闭环、pre 回退、
+真实 ROS Action 反馈/取消/超时、实验记录和既有导航/脱困回归。
+磁盘满输出为预期故障注入。机载还通过真实 ROS/DDS 与模拟机体反馈的完整闭环：
+646 条指令、两个 STG、指令周期中位数约 20.03 ms，模拟耗时约 13.09 s。
+模拟模型无真实制动余动，终态误差不是 G1 真机精度结论。
+
+同步前核对旧文件版本并备份源码、测试、文档与两份部署清单；本轮同步 18 个文件，
+其中新增末端控制器和测试。备份位于机载
+`RealWorldG1/.cache/fine_approach_backups/fine_approach_deployment_20261109T134031Z/`，
+部署与测试记录位于 `RealWorldG1/.cache/fine_approach_deployment_20261109T134031Z/`。
+两份部署清单更新并纳入新文件，正式文件按 SHA-256 校验。
+本轮只启动空闲 PosNav 容器用于隔离验证和同步，未启动正式导航、定位、网桥或真机运动；
+FAST-LIO 保持停止。下次按第 6 节启动加载新实现，无需重编译 Action 或 RViz。
+实际末端误差、coast、停稳等待及小角差边走边转表现仍待完整真机实验验证。
+
+
+**末端速度调整（2026-11-09）：**用户现场观察到 0.15 m/s 基本原地踏步，
+据此将 fine_speed 更新为 **0.20 m/s**。wz_min 仍为 0.15 rad/s，coast 仍为
+0.15 m，其他控制参数不变。本地与机载各通过 33 项末端/FMM 回归（含纯计算闭环）；
+本次同步未执行真实机器人运动。源码、测试及本文同步机载，旧文件与清单备份在
+`RealWorldG1/.cache/fine_speed_backups/fine_speed_020_20261109T141845Z/`。
+
+**再次调整末端速度（2026-11-09）：**按用户要求，fine_speed 从 0.20 m/s
+调整为 **0.25 m/s**；wz_min 仍为 0.15 rad/s，coast 仍为 0.15 m。
+源码、测试及本文同步本地与机载，下次启动 PosNav 加载新速度。
+
+**coast 调整（2026-11-09）：**按用户要求将 coast 从 0.15 m 设为 **0 m**，
+保留参数和 `d<=coast` 停止判据，不引入终止线或位置容差。
+fine_speed 仍为 0.25 m/s，STG 的 epsilon 仍为 0.15 m。
+
+**末端投影停止（2026-11-09）：**位置阶段停止判据改为上述固定方向的有符号
+投影剩余距离，不再使用欧氏距离 d 判断停止。coast 仍为 0 m，drive_align 仍为
+0.1 rad；位置阶段开始时实际位置到目标的连线确定方向，越过终止线后等待 0.50 s，
+再执行原有最终 yaw 对准流程。L2 距离继续用于误差记录，不作为位置验收条件。

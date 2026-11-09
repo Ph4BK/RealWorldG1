@@ -22,6 +22,7 @@ def main():
                'tests/test_live_bev_core.py','tests/test_live_bev_node.py','tests/test_posnav_fmm.py',
                'tools/g1_navigation_core.py','tools/g1_navigation_node.py','tools/g1_action_server.py','tools/stg_error_recorder.py',
                'tests/test_g1_action_server.py','docs/G1_Action接口与TCP联调.md',
+               'tests/test_g1_recovery.py','tests/test_g1_final_approach.py','tools/g1_final_approach.py',
                'tools/experiment_recorder.py','tests/test_experiment_recorder.py',
                'tests/test_experiment_navigation.py',
                'tools/run_g1_live_bev.sh','tests/test_stg_error_recorder.py',

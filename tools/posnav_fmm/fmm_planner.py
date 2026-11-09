@@ -85,10 +85,9 @@ class FMMPlanner():
         subset *= mask
         subset += (1 - mask) * self.fmm_dist.shape[0] ** 2
 
-        if subset[self.du, self.du] < 0.25 * 100 / 5.:  # 25cm
-            stop = True
-        else:
-            stop = False
+        # Close targets are explicit final STGs in plan_snapshot; distance alone
+        # must never terminate planning before the target can be approached.
+        stop = False
 
         subset -= subset[self.du, self.du]
         ratio1 = subset / dist_mask

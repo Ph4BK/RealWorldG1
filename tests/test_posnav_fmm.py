@@ -46,9 +46,46 @@ class FMMTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'outside'):plan_snapshot(grid,[0,0],.05,[1,1],[7,3])
         grid[30:91,30]=True;grid[30:91,90]=True;grid[30,30:91]=True;grid[90,30:91]=True
         with self.assertRaisesRegex(ValueError,'unreachable'):plan_snapshot(grid,[0,0],.05,[1,1],[3.5,3.5])
-    def test_stop_distance_unchanged(self):
-        p=plan_snapshot(np.zeros((60,60),bool),[0,0],.05,[1.025,1.025],[1.125,1.025])
-        self.assertTrue(p.stopped);self.assertIsNone(p.stg_xy)
+    def test_near_goal_is_exact_final_stg_including_subcell_and_zero_distance(self):
+        grid=np.zeros((60,60),bool)
+        for goal in ([1.125,1.025],[1.137,1.041],[1.025,1.025]):
+            p=plan_snapshot(grid,[0,0],.05,[1.025,1.025],goal)
+            self.assertFalse(p.stopped)
+            self.assertTrue(p.final_stg)
+            np.testing.assert_allclose(p.stg_xy,goal)
+
+    def test_near_goal_blocked_line_keeps_planning_a_detour(self):
+        grid=np.zeros((120,120),bool)
+        grid[46:55,52]=True
+        p=plan_snapshot(grid,[0,0],.05,[2.375,2.525],[2.825,2.525],inflation_cells=1)
+        self.assertFalse(p.final_stg)
+        self.assertFalse(p.stopped)
+        self.assertIsNotNone(p.stg_xy)
+
+    def test_full_empty_map_loop_visits_pre_then_approaches_and_aligns(self):
+        from g1_final_approach import PosNav
+        from g1_navigation_core import velocity_xyz
+        grid=np.zeros((160,160),bool)
+        final=(5.,4.,1.2)
+        def route(g):
+            return dict(pre=(g[0]-.6*np.cos(g[2]),g[1]-.6*np.sin(g[2])),reason='clear')
+        n=PosNav(lambda p,g:plan_snapshot(grid,[0,0],.05,p,g),lambda *_:True,route)
+        pose=np.array([1.,4.,-.8])
+        n.pose=tuple(pose);n.pose_time=n.map_time=0.;n.start(final,0.)
+        states=set()
+        for k in range(5000):
+            t=k*.02;n.pose=tuple(pose);n.pose_time=n.map_time=t
+            command=n.tick(t);states.add(n.state)
+            if not n.active:break
+            vx,vy,w=velocity_xyz(command)
+            c,s=np.cos(pose[2]),np.sin(pose[2])
+            pose+=np.array([c*vx-s*vy,s*vx+c*vy,w])*.02
+        self.assertFalse(n.active,n.state)
+        self.assertEqual(n.reason,'Final approach completed')
+        self.assertTrue({'walk','walk_settle','fine_approach','fine_position_settle',
+                         'heading_align','fine_yaw_settle'}.issubset(states),states)
+        self.assertLessEqual(n.final_error_m,n.coast+.01)
+        self.assertLessEqual(abs(n.final_yaw_error),n.yaw_stop_tol+.001)
     def test_supercover_corner_and_furthest_visible(self):
         free=np.ones((30,30),bool);free[11,12]=False
         self.assertIn((11,12),supercover_line((11,11),(12,12)))

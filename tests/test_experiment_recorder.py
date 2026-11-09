@@ -44,7 +44,7 @@ class ExperimentTest(unittest.TestCase):
         self.begin()
         self.recorder.pose((.5, 0., 0.), 124, 'walk')
         self.recorder.pose((2.6, 0., .2), 125, 'walk_settle')
-        self.finish('Arrived within 0.50 m', (2.6, 0., .2))
+        self.finish('Final approach completed', (2.6, 0., .2))
         self.recorder.close()
         self.session.close()
         base = self.session.path
@@ -55,7 +55,8 @@ class ExperimentTest(unittest.TestCase):
         task = json.loads((base/'trials/trial_0001/task.json').read_text())
         result = json.loads((base/'trials/trial_0001/result.json').read_text())
         self.assertEqual(task['goal'], [3., 0., 1.])
-        self.assertFalse(task['final_yaw_control'])
+        self.assertTrue(task['final_yaw_control'])
+        self.assertFalse(task['position_tolerance_checked'])
         self.assertTrue(result['success'])
         self.assertAlmostEqual(result['internal_error_m'], .4)
         with (base/'trials/trial_0001/trajectory.csv').open() as stream:
