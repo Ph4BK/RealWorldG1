@@ -5,7 +5,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from posnav_fmm.planner import plan_snapshot
 from posnav_fmm.visibility import supercover_line,line_is_collision_free,get_stg
-from posnav_fmm.errors import GoalUnreachable, NoVisibleSTG
+from posnav_fmm.errors import GoalUnreachable, NoVisibleSTG, StartInObstacle, PlanningRetry
 from posnav_fmm.fmm_planner import FMMPlanner
 from skimage.morphology import binary_dilation,disk
 
@@ -15,9 +15,10 @@ class FMMTest(unittest.TestCase):
             with self.subTest(obstacle=obstacle):
                 grid=np.zeros((120,120),bool);grid[obstacle]=True
                 original=grid.copy()
-                with self.assertRaisesRegex(GoalUnreachable,'unreachable'):
+                with self.assertRaisesRegex(StartInObstacle,'start_in_obstacle'):
                     plan_snapshot(grid,[0,0],.05,[1.025,3.025],[5.025,3.025])
                 np.testing.assert_array_equal(grid,original)
+        self.assertFalse(issubclass(StartInObstacle, PlanningRetry))
 
     def test_free_start_preserves_inflated_neighbor_cells(self):
         grid=np.zeros((120,120),bool);grid[66,20]=True

@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from scipy.spatial.transform import Rotation
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from live_bev_core import RollingBEV, initial_map_from_odom
+from live_bev_core import RollingBEV, initial_map_from_odom, grid_start_status, room_no_go
 
 
 class FusionTest(unittest.TestCase):
@@ -101,6 +101,55 @@ class FusionTest(unittest.TestCase):
         for radius in [-.1,2.,3.,float('nan'),float('inf')]:
             with self.subTest(radius=radius), self.assertRaises(ValueError):
                 RollingBEV(np.zeros((2,2),bool),[0,0],.05,inner_radius=radius)
+
+    def test_fixed_no_go_survives_annulus_clear_pause_reset_and_clock_reset(self):
+        no_go = room_no_go((100,100), [-2.5,-2.5], .05, [-1.5,1.5,-1.5,1.5])
+        c = RollingBEV(np.ones((100,100),bool), [-2.5,-2.5], .05,
+                       window=10, no_go=no_go)
+        expected = int(no_go.sum())
+        for i in range(10):
+            c.add(i*.1, [[0.,0.,0.]], [1.4,0.,0.])
+        self.assertEqual(int(c.task[c.no_go].sum()), expected)
+        self.assertGreater(c.last_no_go_protected_cells, 0)
+        self.assertFalse(c.task[self.cell(c,.8,0.)])  # Ordinary static obstacle can clear.
+        c.clear_initial_region(1.5,0.)
+        self.assertEqual(int(c.task[c.no_go].sum()), expected)
+        for operation in (c.pause, c.reset):
+            operation()
+            self.assertEqual(int(c.task[c.no_go].sum()), expected)
+        c.add(10., [[0.,0.,0.]], [1.4,0.,0.])
+        c.add(1., [[0.,0.,0.]], [1.4,0.,0.])
+        self.assertTrue(c.task[c.no_go].all())
+        self.assertEqual(c.no_go_cells, expected)
+
+    def test_no_go_is_defensively_copied_and_rejects_wrong_geometry_or_dtype(self):
+        policy = np.zeros((10,10),bool); policy[0] = True
+        c = RollingBEV(np.zeros((10,10),bool), [0,0], .05, no_go=policy)
+        policy[:] = False
+        self.assertTrue(c.task[0].all())
+        self.assertTrue(c.no_go[0].all())
+        with self.assertRaises(ValueError):
+            c.no_go[0,0] = False
+        for bad in (np.zeros((2,2),bool), np.zeros((10,10),np.uint8)):
+            with self.assertRaises(ValueError):
+                RollingBEV(np.zeros((10,10),bool), [0,0], .05, no_go=bad)
+
+    def test_start_status_reports_current_cell_and_nearest_without_snapping(self):
+        free = np.zeros((4,4),bool); free[2,3] = True
+        before = free.copy()
+        xy = np.array([.025,.025])
+        result = grid_start_status(free, np.array([0.,0.]), .05, xy)
+        self.assertIs(result['start_free'], False)
+        self.assertEqual(result['start_rejection_reason'], 'start_in_obstacle')
+        np.testing.assert_allclose(result['nearest_free_xy_m'], [.175,.125])
+        self.assertAlmostEqual(result['nearest_free_cell_distance_m'], math.hypot(.15,.10))
+        np.testing.assert_array_equal(free,before)
+        np.testing.assert_array_equal(xy,[.025,.025])
+        self.assertTrue(grid_start_status(free,[0,0],.05,[.175,.125])['start_free'])
+        self.assertEqual(grid_start_status(free,[0,0],.05,[-.01,0])['start_rejection_reason'],
+                         'start_outside_map')
+        self.assertIsNone(grid_start_status(np.zeros_like(free),[0,0],.05,xy)['nearest_free_cell_distance_m'])
+        self.assertIsNone(grid_start_status(None,None,None,None)['start_free'])
 
     def test_window_max_age(self):
         c=self.make()

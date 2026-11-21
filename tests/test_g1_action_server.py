@@ -397,6 +397,30 @@ class ActionTest(unittest.TestCase):
         self.assertFalse(self.send(refresh=False).accepted)
         self.assertEqual(self.commands, [])
 
+    def test_action_rejects_inflated_start_without_any_motion_and_exposes_reason(self):
+        self.node.free[0,0]=False
+        self.node.start_status_cache=None
+        with patch.object(self.node.control,'recovery') as recovery:
+            h=self.send()
+            self.assertFalse(h.accepted)
+            recovery.assert_not_called()
+        self.assertEqual(self.commands,[])
+        status=json.loads(self.node.last_status)
+        self.assertIs(status['start_free'],False)
+        self.assertEqual(status['start_rejection_reason'],'start_in_obstacle')
+        self.assertGreater(status['nearest_free_cell_distance_m'],0.)
+
+    def test_accepted_action_stops_with_specific_reason_if_start_becomes_blocked(self):
+        h=self.send()
+        self.assertTrue(h.accepted)
+        self.node.free[0,0]=False
+        self.node.start_status_cache=None
+        self.node.tick()
+        result=self.spin(h.get_result_async())
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason,'start_in_obstacle')
+        self.stopped()
+
     def test_fixed_transform_used_for_goal_and_terminal_pose(self):
         self.node.action.transform = (1., 2., math.pi/2)
         self.xy_yaw = (1., 2.1, math.pi/2)

@@ -1,0 +1,5 @@
+# p_map = T_map_from_scene @ p_scene; world frames only, not sensor extrinsics
+1 0 0 0
+0 1 0 0
+0 0 1 0
+0 0 0 1

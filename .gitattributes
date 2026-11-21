@@ -1,2 +1,4 @@
 # Preserve vendored bytes so hashes in posnav/bridge/UPSTREAM.json stay valid.
 posnav/bridge/*.py -text whitespace=cr-at-eol
+# Map manifests verify raw bytes, including retained provenance CRLF files.
+maps/619_go2base/** -text whitespace=cr-at-eol,-blank-at-eof

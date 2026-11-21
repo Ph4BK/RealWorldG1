@@ -1,0 +1,100 @@
+{
+  "version": "619_go2base",
+  "frame": "map",
+  "semantic_coordinate_frame": "d3_619_slam_world_x_forward_y_left_z_up_m",
+  "units": "metres",
+  "source_inputs_sha256": {
+    "场景图/619/D3-619_地图_v1_2026-10-21/D3-619_地图_v1_2026-10-21/D3-619_v1/pointcloud/map_5cm.pcd": "bdfb87e5b5eefbdcc824c4ec099791bb86a79c01a4c1127c066622e9033f6f33",
+    "nav/tools/619_map_v1_clean_5cm.npz": "bc56e8d1e48fd363101723d10c5e392d22b40f65c8729fe88b11a0c8bf37effd",
+    "场景图/619/D3-619_地图_v1_2026-10-21/D3-619_地图_v1_2026-10-21/D3-619_v1/README.md": "15f26e23c8308569fd959c98c981fe836a229cb10338bf73940b12f16edfdf40",
+    "RealWorldG1/fastlio/config/live_bev.yaml": "abb84937bbabeb0031cebfd21339b537b2ed5c688e9bb275fea2a7a105a293b3"
+  },
+  "source_pointcloud": "场景图/619/D3-619_地图_v1_2026-10-21/D3-619_地图_v1_2026-10-21/D3-619_v1/pointcloud/map_5cm.pcd",
+  "map_coordinate_basis": "Source map README: start chassis ground projection; X forward, Y left, Z up",
+  "map_floor_z": 0.0,
+  "floor_basis": "Source README declaration, NOT a new floor-plane fit/survey",
+  "transform_map_from_scene": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "transform_source": "619 source README + existing scene-map documentation; no numerical refit",
+  "navigation_reference": "G1 MID-360 internal IMU; NOT Go2 base / G1 feet or body center",
+  "initial_imu_xyz_map": [
+    null,
+    null,
+    1.24
+  ],
+  "initial_xy_source": "Not a fixed starting pose; draw current IMU XY/yaw manually at runtime",
+  "initial_imu_height": {
+    "value_m": 1.24,
+    "status": "provided",
+    "source": "tape_measure_2026-11-19 lidar dome centre 124cm / waist 64cm; user-approved IMU-height approximation, standing posture",
+    "applies_to": "619 G1 navigation standing posture"
+  },
+  "runtime_initialization_ready": true,
+  "robot_body_imu_extrinsics_status": "Unknown; must be calibrated separately, never inserted in T_map_from_scene",
+  "map_bounds_xyz": [
+    [
+      -31.245315551757812,
+      -19.143983840942383,
+      -1.0763881206512451
+    ],
+    [
+      10.753019332885742,
+      8.145766258239746,
+      18.573257446289062
+    ]
+  ],
+  "limitations": [
+    "Offline coordinate consistency only; no live G1 localization or navigation accuracy validated",
+    "Cleaned grid is inherited from Go2; G1 taller-body and overhang clearance not certified",
+    "Source room observations date from 2026-10-12/13; scene may have changed",
+    "Missing/occluded points are not evidence of free space",
+    "BEV uses inherited grid ROI; original all-height ICP PCD is copied byte-for-byte",
+    "G1 IMU yaw/position is not a body/feet-center goal without a separate extrinsic contract"
+  ],
+  "bev_source": "go2-grid",
+  "parameter_source": "Go2 cleaned grid (unexpanded)",
+  "fixed_no_go": {
+    "file": "no_go.npz",
+    "sha256": "02d30ff92d8ee5e43023313dd0e7289d2d89fd742d03395fcfcac6618e647358",
+    "source": "go2_room_bounds_grid_anchor_inclusive",
+    "room_bounds_xmin_xmax_ymin_ymax_m": [
+      -10.850999999999999,
+      9.249,
+      -8.51,
+      4.14
+    ],
+    "occupied_cells": 87894,
+    "semantic": "Immutable policy, OR after dynamic fusion AND explicit initial clearing"
+  },
+  "planning_inflation": {
+    "cells": 5,
+    "value_m": 0.25,
+    "source": "User decision 2026-11-21: measured G1 shoulder width about 0.38m; keep existing 5 cells",
+    "status": "User-selected margin, NOT full-body swept-volume certification"
+  },
+  "initial_height_reference_note": "User-provided lidar dome centre height approximates IMU height; not a measured lidar-to-IMU offset"
+}

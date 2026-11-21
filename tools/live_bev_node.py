@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 
 import numpy as np
 import yaml
@@ -29,9 +30,13 @@ from std_msgs.msg import String, ColorRGBA, Empty
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import StaticTransformBroadcaster
-from live_bev_core import RollingBEV, checked_transform, initial_map_from_odom
+from live_bev_core import (RollingBEV, checked_transform, initial_map_from_odom,
+                           load_fixed_no_go, grid_start_status, obstacle_map_topic,
+                           OBSTACLE_MODES, STATIC_TEST_WARNING)
+from skimage.morphology import binary_dilation, disk
 from posnav_fmm.planner import plan_snapshot
 from experiment_recorder import ExperimentSession
+from g1_control_pose import monotonic_clock_id
 
 
 def stamp_s(stamp):
@@ -88,21 +93,45 @@ class Child:
 
 class LiveBEV(Node):
     def __init__(self, args):
+        obstacle_mode = getattr(args, 'obstacle_mode', 'dynamic')
+        map_topic = obstacle_map_topic(obstacle_mode)
         super().__init__('g1_live_bev')
         self.args = args
+        self.obstacle_mode, self.navigation_map_topic = obstacle_mode, map_topic
         self.experiment = getattr(args, 'experiment', None)
         self.cfg = yaml.safe_load(args.config.read_text())
         self.map_config = json.loads((args.map_dir / 'bev_config.json').read_text())
         with np.load(args.map_dir / 'bev_occupancy.npz') as d:
+            no_go = load_fixed_no_go(args.map_dir, self.map_config,
+                                    d['occ'].shape, d['origin'], float(d['res']))
             self.core = RollingBEV(d['occ'], d['origin'], float(d['res']),
                 window=self.cfg['window_frames'], min_points=self.cfg['min_points'],
                 z_min=self.cfg['z_min'], z_max=self.cfg['z_max'],
                 radius=self.cfg['update_radius_m'],
                 inner_radius=self.cfg['update_inner_radius_m'],
-                max_window_age=self.cfg['max_window_age_s'])
+                max_window_age=self.cfg['max_window_age_s'], no_go=no_go)
         assert np.allclose(self.core.origin, self.map_config['origin_xy_m'])
         assert self.core.res == self.map_config['resolution_m']
         self.z = float(yaml.safe_load((args.map_dir / 'metadata.yaml').read_text())['initial_imu_xyz_map'][2])
+        # Disabling fusion would still clear static obstacles in the annulus.
+        # Keep a separate immutable union, without changing the dynamic task.
+        self.static_test_occupancy = self.core.static | self.core.no_go
+        self.static_test_occupancy.setflags(write=False)
+        self.static_test_grid = None
+        if obstacle_mode == 'static_test':
+            self.get_logger().warning(STATIC_TEST_WARNING + '; map=' + map_topic)
+        else:
+            self.get_logger().info('Obstacle mode: dynamic; map=' + map_topic)
+        if self.experiment:
+            self.experiment.event('obstacle_mode_selected', obstacle_mode=obstacle_mode,
+                                  navigation_map_topic=map_topic)
+        self.allow_initial_clear = self.cfg.get('allow_initial_clear', False)
+        if not isinstance(self.allow_initial_clear, bool):
+            raise ValueError('allow_initial_clear must be an explicit boolean')
+        self.initial_clear_count = 0
+        self.start_check_free = None
+        self.get_logger().info('BEV fixed no-go: %d cells; allow_initial_clear=%s' %
+                               (self.core.no_go_cells, self.allow_initial_clear))
         self.imu, self.odom, self.pending = deque(maxlen=1000), deque(maxlen=100), deque(maxlen=10)
         self.received = dict(imu=0., odom=0., cloud=0., registration=0.)
         self.selected = None
@@ -127,6 +156,9 @@ class LiveBEV(Node):
         self.notice_until = 0.
         self.updates = 0
         self.map_update_stamp = None
+        self.control_session = uuid.uuid4().hex
+        self.control_map_epoch = 0
+        self.control_reference_revision = 0
         self.last_status = 0.
         self.last_graph_check = 0.
         self.graph_error = ''
@@ -153,12 +185,15 @@ class LiveBEV(Node):
         sensor = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.maps = {name: self.create_publisher(OccupancyGrid, '/g1/bev/' + name, latched)
                      for name in ['static', 'local', 'task']}
+        if obstacle_mode == 'static_test':
+            self.maps['static_test'] = self.create_publisher(OccupancyGrid, map_topic, latched)
         self.cell_points = [Point(x=float(x),y=float(y),z=.004)
                             for x,y in zip(self.core.x.ravel(),self.core.y.ravel())]
         self.full_display = {name:self.create_publisher(MarkerArray, '/g1/bev/'+name+'_display', latched)
                              for name in ['static','task']}
         self.local_display = self.create_publisher(Marker, '/g1/bev/local_display', latched)
         self.status = self.create_publisher(String, '/g1/live_bev/status', latched)
+        self.control_reference = self.create_publisher(String, '/g1/live_bev/control_reference', latched)
         self.nav_cancel = self.create_publisher(Empty, '/g1/navigation/cancel', 10)
         self.preview = self.create_publisher(PoseStamped, '/g1/live_bev/initial_arrow', latched)
         self.robot = self.create_publisher(PoseStamped, '/g1/live_bev/robot', 5)
@@ -291,7 +326,7 @@ class LiveBEV(Node):
             if problem:raise ValueError(problem)
             # Single-threaded ROS callback: map, goal and pose are a consistent snapshot.
             robot=self.transform @ self.odom[-1][1]
-            self.plan=plan_snapshot(self.core.task.copy(),self.core.origin,self.core.res,
+            self.plan=plan_snapshot(self.navigation_occupancy().copy(),self.core.origin,self.core.res,
                 robot[:2,3],(self.goal['x'],self.goal['y']),
                 inflation_cells=self.cfg['fmm_inflation_cells'], step_cells=self.cfg['fmm_step_cells'],
                 max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'])
@@ -380,9 +415,16 @@ class LiveBEV(Node):
                 '-r',f'/Odometry_loc:={self.cfg["odom_topic"]}',
                 '--disable-external-lib-logs','--disable-rosout-logs']
             self.child = Child(command, self.args.run_dir/'localization.log')
+            self.control_session = uuid.uuid4().hex
+            self.control_map_epoch += 1
             self.active = True; self.transform = None; self.accepted = False
             self.registration_stamp = -math.inf; self.core.reset(); self.pending.clear(); self.updates = 0
-            self.initial_clear_pending = True
+            self.initial_clear_pending = self.allow_initial_clear
+            self.initial_clear_count = 0
+            if self.experiment:
+                self.experiment.event('bev_policy', allow_initial_clear=self.allow_initial_clear,
+                    fixed_no_go_cells=self.core.no_go_cells,
+                    fixed_no_go=self.map_config.get('fixed_no_go'))
             self.map_update_stamp = None
             self.pending_registrations.clear()
             self.registration_deferred = self.registration_wait_timeouts = 0
@@ -405,6 +447,7 @@ class LiveBEV(Node):
         self.clear_plan()
         self.notice = ''; self.notice_until = 0.
         self.active = False
+        self.publish_control_reference()
         self.initial_clear_pending = False
         self.pending_registrations.clear()
         if self.child is not None:
@@ -421,6 +464,7 @@ class LiveBEV(Node):
         if self.experiment:
             self.experiment.event('static_map_reset_request')
         self.map_update_stamp = None
+        self.control_map_epoch += 1
         self.clear_plan()
         self.core.reset(); self.pending.clear(); self.updates = 0
         self.initial_clear_pending = False
@@ -478,6 +522,7 @@ class LiveBEV(Node):
     def apply_registration(self, received, stamp, fitness, transform, accepted):
         self.registration_error = ''
         self.registration_stamp = stamp
+        self.control_reference_revision += 1
         # Waiting must not make an old result look freshly received.
         self.received['registration'] = received
         self.fitness = fitness
@@ -487,11 +532,13 @@ class LiveBEV(Node):
             if (np.linalg.norm(delta[:3, 3]) > self.cfg['transform_jump_translation_m'] or
                     Rotation.from_matrix(delta[:3, :3]).magnitude() > math.radians(self.cfg['transform_jump_rotation_deg'])):
                 self.map_update_stamp = None
+                self.control_map_epoch += 1
                 self.core.reset(); self.pending.clear(); self.clear_plan(); self.publish_maps()
         if self.accepted:
             self.transform = transform
         else:
             self.core.pause(); self.pending.clear(); self.publish_maps()
+        self.publish_control_reference()
 
     def health(self):
         now = time.monotonic()
@@ -523,6 +570,7 @@ class LiveBEV(Node):
                 self.core.pause(); self.pending.clear(); self.publish_maps()
             self.active = False; self.error = f'Localization exited ({self.child.proc.returncode}); press Stop and inspect the log.'
             self.pending_registrations.clear()
+            self.publish_control_reference()
         if self.active:
             self.retry_registrations()
             problem = self.health()
@@ -554,8 +602,15 @@ class LiveBEV(Node):
                         updated = self.core.add(stamp, mapped, [robot[0,3], robot[1,3], yaw])
                         initial_cleared = self.initial_clear_pending
                         if initial_cleared:
-                            self.core.clear_initial_region(robot[0,3], robot[1,3])
+                            cleared = self.core.clear_initial_region(robot[0,3], robot[1,3])
                             self.initial_clear_pending = False
+                            self.initial_clear_count += 1
+                            self.get_logger().warning('Explicit initial clear: %d cells; protected no-go=%d' %
+                                (cleared, self.core.last_no_go_protected_cells))
+                            if self.experiment:
+                                self.experiment.event('initial_region_cleared', cleared_cells=cleared,
+                                    pose_xy=robot[:2,3].tolist(),
+                                    protected_no_go_cells=self.core.last_no_go_protected_cells)
                         self.publish_pose(robot, cloud.header.stamp)
                         if updated:
                             self.map_update_stamp = self.get_clock().now().to_msg()
@@ -580,7 +635,38 @@ class LiveBEV(Node):
         msg.data = data.astype(np.int8).ravel().tolist()
         return msg
 
+    def navigation_occupancy(self):
+        """Preview and execution must select the same startup-only source."""
+        return self.static_test_occupancy if self.obstacle_mode == 'static_test' else self.core.task
+
+    def publish_control_reference(self):
+        """Lease accepted T to the independent navigation process, not a pose.
+
+        Deadlines retain the original sensor/ICP receipt times. Republishing
+        must not renew failed sensors or an expired registration.
+        """
+        now = time.monotonic()
+        problem = ('Localization is stopped' if not self.active else
+                   'Waiting for control odometry' if not self.odom else self.health())
+        valid = not problem and self.map_update_stamp is not None
+        deadline = min(self.received['registration']+self.cfg['registration_timeout_s'],
+                       self.received['odom']+self.cfg['sensor_timeout_s'],
+                       self.received['cloud']+self.cfg['sensor_timeout_s'])
+        map_stamp = self.map_update_stamp
+        packet = dict(schema_version=1, clock_id=monotonic_clock_id(),
+            session_id=self.control_session, map_epoch=self.control_map_epoch,
+            revision=self.control_reference_revision, sent_monotonic=now,
+            valid_until_monotonic=deadline, valid=bool(valid),
+            reason=problem or ('' if valid else 'Waiting for a genuine fused map'),
+            transform=None if self.transform is None else self.transform.tolist(),
+            registration_stamp=self.registration_stamp if math.isfinite(self.registration_stamp) else 0.,
+            latest_odom_stamp=self.odom[-1][0] if self.odom else 0.,
+            odom_received_monotonic=self.received['odom'],
+            map_stamp_ns=0 if map_stamp is None else map_stamp.sec*1000000000+map_stamp.nanosec)
+        self.control_reference.publish(String(data=json.dumps(packet)))
+
     def publish_maps(self, static=False, force_display=True):
+        self.start_check_free = None  # Rebuild at status rate, not every control cycle.
         if static:
             self.maps['static'].publish(self.grid(self.core.static.astype(np.int8)*100))
             self.publish_full_display('static', self.core.static)
@@ -592,7 +678,16 @@ class LiveBEV(Node):
         else:
             task.header.stamp = self.map_update_stamp
         self.maps['task'].publish(task)
+        if self.obstacle_mode == 'static_test':
+            if self.static_test_grid is None:
+                # Cache the immutable data, not a second Python list per frame.
+                self.static_test_grid = self.grid(self.static_test_occupancy.astype(np.int8)*100)
+            # Still require genuine successful fusion. Pauses, resets and missing
+            # sensors must not refresh the selected map's validity.
+            self.static_test_grid.header.stamp = task.header.stamp
+            self.maps['static_test'].publish(self.static_test_grid)
         self.maps['local'].publish(self.grid(np.where(self.core.mask, self.core.local*100, -1)))
+        self.publish_control_reference()
         self.display_dirty = True
         if force_display:
             self.publish_displays(force=True)
@@ -600,7 +695,7 @@ class LiveBEV(Node):
     def publish_displays(self, force=False):
         if not self.display_dirty or (not force and time.monotonic() - self.last_display < self.display_period):
             return
-        self.publish_full_display('task', self.core.task)
+        self.publish_full_display('task', self.navigation_occupancy())
 
         # OccupancyGrid -1 is usually gray in RViz, not transparent. Render only
         # selected cells as black/white tiles, so the exterior is truly absent.
@@ -638,7 +733,21 @@ class LiveBEV(Node):
         obstacles.color=ColorRGBA(r=0.,g=0.,b=0.,a=1.)
         obstacles.points=[self.cell_points[i] for i in np.flatnonzero(occupied)]
         if not obstacles.points: obstacles.action=Marker.DELETE
-        self.full_display[name].publish(MarkerArray(markers=[background,obstacles]))
+        markers = [background, obstacles]
+        if name == 'task':
+            warning = Marker(); warning.header = background.header
+            warning.ns = 'navigation_obstacle_mode'; warning.id = 2
+            warning.type = Marker.TEXT_VIEW_FACING
+            warning.action = Marker.ADD if self.obstacle_mode == 'static_test' else Marker.DELETE
+            warning.pose.orientation.w = 1.
+            warning.pose.position.x = background.pose.position.x
+            warning.pose.position.y = float(self.core.origin[1]+height*self.core.res-.25)
+            warning.pose.position.z = .15
+            warning.scale.z = .20
+            warning.color = ColorRGBA(r=1., g=0., b=0., a=1.)
+            warning.text = STATIC_TEST_WARNING
+            markers.append(warning)
+        self.full_display[name].publish(MarkerArray(markers=markers))
 
     @staticmethod
     def arrow_marker(pose, namespace, color):
@@ -666,15 +775,43 @@ class LiveBEV(Node):
 
     def publish_status(self):
         self.last_status=time.monotonic()
+        self.publish_control_reference()
         message = self.error or self.registration_error or self.message
         if self.last_status < self.notice_until:
             message += '\n' + self.notice
+        if self.obstacle_mode == 'static_test':
+            message = STATIC_TEST_WARNING + '; ' + message
+        current_xy = None
+        if (self.active and self.accepted and self.transform is not None and self.odom and
+                self.last_status-self.received['odom'] <= self.cfg['sensor_timeout_s']):
+            current_xy = (self.transform @ self.odom[-1][1])[:2,3]
+        if self.start_check_free is None:
+            self.start_check_free = ~binary_dilation(self.navigation_occupancy(), disk(self.cfg['fmm_inflation_cells']))
+        start = grid_start_status(self.start_check_free, self.core.origin, self.core.res, current_xy)
         self.status.publish(String(data=json.dumps(dict(pose=self.selected,goal=self.goal,running=self.child is not None,
+            control_pose_protocol=1, control_session_id=self.control_session,
+            control_map_epoch=self.control_map_epoch, control_reference_revision=self.control_reference_revision,
+            obstacle_mode=self.obstacle_mode, navigation_map_topic=self.navigation_map_topic,
+            dynamic_obstacles_used=self.obstacle_mode == 'dynamic',
+            **start, start_check_inflation_m=self.cfg['fmm_inflation_cells']*self.core.res,
+            allow_initial_clear=self.allow_initial_clear, initial_clear_count=self.initial_clear_count,
+            fixed_no_go_cells=self.core.no_go_cells,
+            fixed_no_go_protected_cells=self.core.last_no_go_protected_cells,
             plan_message=self.plan_message,
             pending_registrations=len(self.pending_registrations),
             registration_deferred=self.registration_deferred,
             registration_wait_timeouts=self.registration_wait_timeouts,
             message=message,frames=len(self.core.frames),window_frames=self.core.window,updates=self.updates,fitness=self.fitness))))
+
+
+def navigation_command(root, args, experiment=None):
+    """Keep the parent and its navigation child on the same source."""
+    mode = getattr(args, 'obstacle_mode', 'dynamic')
+    obstacle_map_topic(mode)  # Fail loudly before spawning a child.
+    return ([sys.executable, str(root/'tools/g1_navigation_node.py'), '--config', str(args.config)] +
+            (['--record-stg-errors'] if args.record_stg_errors else []) +
+            (['--experiment-dir', str(experiment.path)] if experiment else []) +
+            (['--obstacle-mode', mode] if mode != 'dynamic' else []))
 
 
 def main():
@@ -685,6 +822,8 @@ def main():
     parser.add_argument('--run-dir',type=Path,default=root/'.cache/live_bev')
     parser.add_argument('--headless',action='store_true')
     parser.add_argument('--record-stg-errors',action='store_true')
+    parser.add_argument('--obstacle-mode', choices=OBSTACLE_MODES, default='dynamic',
+                        help='static_test ignores realtime obstacles; controlled static-map experiments only')
     parser.add_argument('--record-experiment',action='store_true',
                         help='Save a self-contained timestamped experiment bundle on G1')
     args=parser.parse_args(); args.run_dir.mkdir(parents=True,exist_ok=True)
@@ -702,10 +841,7 @@ def main():
     failure = None
     try:
         node=LiveBEV(args)
-        navigation=Child([sys.executable,str(root/'tools/g1_navigation_node.py'),
-                          '--config',str(args.config)]+
-                         (['--record-stg-errors'] if args.record_stg_errors else [])+
-                         (['--experiment-dir',str(experiment.path)] if experiment else []),
+        navigation=Child(navigation_command(root, args, experiment),
                          args.run_dir/'navigation.log')
         if not args.headless:
             rviz=Child(['rviz2','-d',str(root/'fastlio/rviz/live_bev.rviz'),'--ros-args','-p','use_sim_time:=false',

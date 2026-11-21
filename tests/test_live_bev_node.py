@@ -83,6 +83,7 @@ class NodeTest(unittest.TestCase):
 
     def test_initial_clear_uses_first_output_pose_once_and_draws_annulus(self):
         n=self.node;n.core.static[:]=True
+        n.allow_initial_clear=True  # Legacy behavior is now an explicit opt-in.
         self.start_session()
         self.assertTrue(n.initial_clear_pending)
         self.assertTrue(n.core.task.all())
@@ -125,6 +126,49 @@ class NodeTest(unittest.TestCase):
         inner=np.hypot(n.core.x,n.core.y)<=.3
         self.assertFalse(n.core.task[inner].any())
         self.assertFalse(n.initial_clear_pending)
+
+    def test_default_start_never_clears_start_and_reports_inflated_obstacle(self):
+        n=self.node; n.core.static[:]=True
+        self.start_session()
+        self.assertFalse(n.allow_initial_clear)
+        self.assertFalse(n.initial_clear_pending)
+        self.registration(12.)
+        self.odom(12.1);self.cloud(12.1);n.tick()
+        self.assertTrue(n.core.task.all())
+        with patch.object(n.status,'publish') as published:
+            n.publish_status()
+        status=json.loads(published.call_args.args[0].data)
+        self.assertIs(status['start_free'],False)
+        self.assertEqual(status['start_rejection_reason'],'start_in_obstacle')
+        self.assertIsNone(status['nearest_free_cell_distance_m'])
+        self.assertEqual(status['initial_clear_count'],0)
+
+    def test_real_constructor_loads_fixed_policy_and_opt_in_clear_is_recorded(self):
+        from build_g1_619_map import SOURCE_DIR,build_package
+        from experiment_recorder import ExperimentSession
+        package=Path(self.tmp.name)/'cleaned'
+        build_package(SOURCE_DIR/'pointcloud/map_5cm.pcd',
+            ROOT.parent/'nav/tools/619_map_v1_clean_5cm.npz',SOURCE_DIR/'README.md',package,
+            bev_source='go2-grid',imu_height_m=1.24,imu_height_source='TEST dome approximation')
+        config=json.loads((package/'runtime_live_bev.yaml').read_text())
+        config['allow_initial_clear']=True
+        runtime=Path(self.tmp.name)/'explicit_clear.json';runtime.write_text(json.dumps(config))
+        n=LiveBEV(SimpleNamespace(config=runtime,map_dir=package,run_dir=Path(self.tmp.name)))
+        experiment=ExperimentSession(ROOT,package,runtime,Path(self.tmp.name)/'recordings')
+        n.experiment=experiment
+        old=self.node;self.node=n
+        n.count_publishers=lambda topic: 1 if topic in ['/cloud_registered_1','/Odometry_loc'] else 0
+        try:
+            self.start_session();self.registration(12.)
+            self.odom(12.1);self.cloud(12.1);n.tick()
+            self.assertEqual(n.core.no_go_cells,87894)
+            self.assertTrue(n.core.task[n.core.no_go].all())
+            experiment.writer.queue.join()
+            rows=[json.loads(line) for line in (experiment.path/'localization_events.jsonl').read_text().splitlines()]
+            self.assertTrue(any(row['event']=='bev_policy' and row['allow_initial_clear'] for row in rows))
+            self.assertTrue(any(row['event']=='initial_region_cleared' for row in rows))
+        finally:
+            self.node=old;experiment.close();n.destroy_node()
 
     def test_static_restore_before_first_pose_disables_initial_clear(self):
         n=self.node;n.core.static[:]=True

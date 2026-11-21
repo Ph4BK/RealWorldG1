@@ -6,7 +6,7 @@ from scipy.ndimage import label
 from skimage.morphology import binary_dilation, disk
 from .fmm_planner import FMMPlanner
 from .visibility import get_stg, line_is_collision_free
-from .errors import GoalUnreachable, NoVisibleSTG
+from .errors import GoalUnreachable, NoVisibleSTG, StartInObstacle
 
 
 @dataclass
@@ -48,6 +48,8 @@ def plan_snapshot(occupancy, origin, resolution, start_xy, goal_xy, *,
         return int(row),int(col)
     start=cell(start_xy);goal=cell(goal_xy)
     free=~binary_dilation(occupied,disk(inflation_cells))
+    if not free[start]:
+        raise StartInObstacle('start_in_obstacle: current cell is occupied after obstacle inflation')
     if not free[goal]:raise ValueError('Goal is occupied after obstacle inflation; redraw the goal')
     # Preserve inflated obstacles at and around the start, as execution does.
     # Keep the existing traversible one-cell padding.
