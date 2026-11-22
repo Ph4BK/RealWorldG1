@@ -9,11 +9,12 @@ import time
 
 import numpy as np
 import yaml
+from scipy.spatial.transform import Rotation
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import String, Empty
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
@@ -25,7 +26,11 @@ from stg_error_recorder import STGErrorRecorder, STGErrorLog
 from experiment_recorder import TrialRecorder, ExperimentSTGRecorder
 from posnav_fmm.planner import plan_snapshot
 from posnav_fmm.errors import PlanningRetry
+from posnav_fmm.errors import StartInObstacle
+from live_bev_core import (grid_start_status, obstacle_map_topic, OBSTACLE_MODES,
+                           STATIC_TEST_WARNING)
 from posnav_fmm.visibility import line_is_collision_free
+from g1_control_pose import LatestControlPose, odometry_matrix
 
 
 def planar(message):
@@ -63,9 +68,21 @@ def recovery_occupancy(occupancy, origin, resolution, pose, radius=.75, near_rad
 
 
 class NavigationNode(Node):
-    def __init__(self, config, record_stg_errors=False, stg_error_dir=None, experiment_dir=None):
+    def __init__(self, config, record_stg_errors=False, stg_error_dir=None, experiment_dir=None,
+                 obstacle_mode='dynamic'):
+        map_topic = obstacle_map_topic(obstacle_mode)
         super().__init__('g1_navigation')
+        self.obstacle_mode, self.navigation_map_topic = obstacle_mode, map_topic
+        if obstacle_mode == 'static_test':
+            self.get_logger().warning(STATIC_TEST_WARNING + '; map=' + map_topic)
+        else:
+            self.get_logger().info('Obstacle mode: dynamic; map=' + map_topic)
         self.cfg = yaml.safe_load(Path(config).read_text())
+        self.latest_control_pose = LatestControlPose(Navigation.pose_timeout, self.cfg['registration_timeout_s'])
+        self.control_pose_status = dict(valid=False, reason='Waiting for latest-odometry control pose')
+        self.last_control_pose_token = None
+        self.control_reference_identity = None
+        self.control_odom_source_stamp_ns = None
         self.error_log = None
         self.recording_error = None
         if record_stg_errors:
@@ -80,7 +97,8 @@ class NavigationNode(Node):
             parameters = {key: getattr(self.control, key) for cls in (Navigation, PosNav)
                           for key, value in vars(cls).items() if isinstance(value, (int, float))}
             parameters.pop('goal_tol', None)
-            self.experiment = TrialRecorder(experiment_dir, dict(control=parameters, planning=self.cfg))
+            self.experiment = TrialRecorder(experiment_dir, dict(control=parameters, planning=self.cfg,
+                obstacle_mode=obstacle_mode, navigation_map_topic=map_topic))
             self.control.recorder = ExperimentSTGRecorder(self.experiment)
         self.goal = None
         self.goal_pose = None
@@ -89,16 +107,22 @@ class NavigationNode(Node):
         self.last_health_time = -math.inf
         self.last_health_key = None
         self.occupancy = self.free = None
+        self.start_status_cache = None
         self.map_stamp = None
         self.last_status = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.commands = self.create_publisher(Request, '/api/sport/request', 1)
         self.status = self.create_publisher(String, '/g1/navigation/status', latched)
+        self.control_pose_output = self.create_publisher(PoseStamped, '/g1/navigation/control_pose', 1)
         # Read-only goal state for displays, distinct from the redraw command.
         self.goal_state = self.create_publisher(PoseStamped, '/g1/navigation/goal', latched)
         self.stg_display = self.create_publisher(Marker, '/g1/live_bev/stg_macro', latched)
-        self.create_subscription(PoseStamped, '/g1/live_bev/robot', self.on_pose, 1)
-        self.create_subscription(OccupancyGrid, '/g1/bev/task', self.on_map, latched)
+        # This process is already separate from LiveBEV's cloud/BEV computation.
+        # Depth one: use latest odometry, never drain a history to control motion.
+        latest = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self.create_subscription(Odometry, self.cfg['odom_topic'], self.on_control_odom, latest)
+        self.create_subscription(String, '/g1/live_bev/control_reference', self.on_control_reference, latched)
+        self.create_subscription(OccupancyGrid, map_topic, self.on_map, latched)
         self.create_subscription(PoseStamped, '/g1/live_bev/goal_2d', self.on_goal, 10)
         self.create_subscription(Empty, '/g1/navigation/cancel', lambda _: self.cancel('Localization stopped or map reset'), 10)
         if self.experiment:
@@ -215,11 +239,70 @@ class NavigationNode(Node):
                 self.experiment.event('goal_rejected', reason=str(exc))
         self.publish_status()
 
-    def on_pose(self, msg):
+    def on_control_reference(self, msg):
+        old_identity = self.control_reference_identity
+        try:
+            data = json.loads(msg.data)
+        except (ValueError, TypeError) as exc:
+            data = {}  # The validator invalidates the lease, never keeps old T.
+        changed = self.latest_control_pose.set_reference(data, time.monotonic())
+        new = self.latest_control_pose.reference
+        if changed and new:
+            identity = (new['session_id'], new['map_epoch'])
+            if old_identity is not None and old_identity != identity:
+                self.control.map_time = -math.inf
+                self.control.pose_time = -math.inf
+                if self.control.active:
+                    self.cancel('Control localization session or map epoch changed')
+            self.control_reference_identity = identity
+        self.refresh_control_pose()
+
+    def on_control_odom(self, msg):
+        try:
+            matrix = odometry_matrix(msg, self.cfg['odom_frame'])
+            source_stamp = stamp_ns(msg)
+            if self.latest_control_pose.set_odometry(source_stamp/1e9, matrix, time.monotonic()):
+                self.control_odom_source_stamp_ns = source_stamp
+        except (ValueError, TypeError) as exc:
+            self.latest_control_pose.seen_input = True
+            self.latest_control_pose.odom = None
+            self.latest_control_pose.error = str(exc)
+        self.refresh_control_pose()
+
+    def refresh_control_pose(self):
+        source = self.latest_control_pose
+        if not source.seen_input:
+            return  # No production pose exists; deterministic controller fixtures may inject one.
+        state = source.snapshot(time.monotonic())
+        if state['valid'] and (self.map_stamp is None or self.map_stamp < state['required_map_stamp_ns']):
+            state = dict(valid=False, reason='Waiting for selected map matching the control reference')
+        self.control_pose_status = {k: v for k, v in state.items() if k not in ('transform', 'sample_time')}
+        if not state['valid']:
+            self.control.pose_time = -math.inf
+            return
+        matrix = state['transform']
+        msg = PoseStamped(); msg.header.frame_id = 'map'
+        msg.header.stamp.sec = self.control_odom_source_stamp_ns // 1000000000
+        msg.header.stamp.nanosec = self.control_odom_source_stamp_ns % 1000000000
+        self.control_pose_status['source_stamp_ns'] = self.control_odom_source_stamp_ns
+        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = map(float, matrix[:3, 3])
+        quaternion = Rotation.from_matrix(matrix[:3, :3]).as_quat()
+        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = map(float, quaternion)
+        token = (state['session_id'], state['revision'], self.control_odom_source_stamp_ns)
+        if token != self.last_control_pose_token:
+            self.on_pose(msg, sample_time=state['sample_time'])
+            self.control_pose_output.publish(msg)
+            if self.experiment:
+                self.experiment.event('control_pose_sample', **self.control_pose_status)
+            self.last_control_pose_token = token
+        else:
+            self.control.pose_time = state['sample_time']
+
+    def on_pose(self, msg, sample_time=None):
+        """Apply an internally validated control sample; not a ROS subscription."""
         try:
             self.control.pose = planar(msg)
-            # Deliberately no source stamp age, duplicate or rollback checks.
-            self.control.pose_time = time.monotonic()
+            self.control.pose_time = time.monotonic() if sample_time is None else sample_time
             self.pose_source_stamp = stamp_ns(msg)
             if self.experiment:
                 self.experiment.pose(self.control.pose, self.pose_source_stamp, self.control.state)
@@ -251,10 +334,12 @@ class NavigationNode(Node):
             self.resolution = .05
             self.free = ~binary_dilation(self.occupancy, disk(self.cfg['fmm_inflation_cells']))
             self.control.map_revision = stamp
+            self.refresh_control_pose()
             if self.experiment:
                 self.record_grid = data.astype(np.int8)
                 p, q = msg.info.origin.position, msg.info.origin.orientation
                 self.record_grid_metadata = dict(source_stamp_ns=stamp, frame_id=msg.header.frame_id,
+                    obstacle_mode=self.obstacle_mode, navigation_map_topic=self.navigation_map_topic,
                     resolution_m=msg.info.resolution, width=msg.info.width, height=msg.info.height,
                     origin_position=[p.x, p.y, p.z], origin_quaternion=[q.x, q.y, q.z, q.w])
         except (ValueError, TypeError) as exc:
@@ -270,8 +355,29 @@ class NavigationNode(Node):
         return recovery_occupancy(self.occupancy, self.origin, self.resolution, pose,
             self.control.recovery_radius, self.control.recovery_near_radius)
 
+    def start_status(self):
+        xy = None if self.control.pose is None else self.control.pose[:2]
+        key = (self.map_stamp, xy)
+        cached = self.start_status_cache
+        if cached is None or cached[0] != key:
+            status = grid_start_status(self.free, getattr(self, 'origin', None),
+                                       getattr(self, 'resolution', None), xy)
+            self.start_status_cache = (key, status)
+        return self.start_status_cache[1]
+
+    def require_start_free(self):
+        xy = None if self.control.pose is None else self.control.pose[:2]
+        status = grid_start_status(self.free, getattr(self, 'origin', None),
+                                   getattr(self, 'resolution', None), xy, nearest=False)
+        if status['start_free'] is not True:
+            reason = status['start_rejection_reason']
+            if reason == 'start_in_obstacle':
+                raise StartInObstacle(reason+': current cell is occupied after obstacle inflation')
+            raise ValueError(reason)
+
     def navigation_route(self, goal):
         """Use pre only when its cell and the complete pre-to-goal segment are free."""
+        self.require_start_free()
         def free_point(point):
             r, c = self.cell(point)
             return 0 <= r < self.free.shape[0] and 0 <= c < self.free.shape[1] and self.free[r,c]
@@ -355,12 +461,17 @@ class NavigationNode(Node):
 
     def begin_navigation(self, goal_pose):
         """Shared entry; caller holds the node's mutually exclusive callback group."""
+        self.refresh_control_pose()
         if self.experiment and self.experiment.writer.error:
             raise ValueError('Experiment recording failed: '+self.experiment.writer.error)
         if self.recording_error is not None:
             raise ValueError(self.recording_error)
         if goal_pose is None:
             raise ValueError('Draw the goal arrow first')
+        problem = self.control.input_problem(time.monotonic())
+        if problem:
+            raise ValueError(problem)
+        self.require_start_free()
         self.control.start(goal_pose, time.monotonic())
         self.goal_pose = tuple(goal_pose)
         self.goal = self.goal_pose[:2]
@@ -389,11 +500,16 @@ class NavigationNode(Node):
         return response
 
     def tick(self):
+        self.refresh_control_pose()
         self.action.update()
         try:
+            if self.control.active and not self.control.input_problem(time.monotonic()):
+                self.require_start_free()
             velocity = self.control.tick(time.monotonic())
             if velocity is not None:
                 self.send(velocity)
+        except StartInObstacle:
+            self.cancel('start_in_obstacle')
         except Exception as exc:
             self.cancel('Navigation stopped: '+str(exc))
         # Disk I/O follows command publication, never precedes the stop command.
@@ -407,7 +523,15 @@ class NavigationNode(Node):
 
     def publish_status(self):
         c = self.control
-        status = json.dumps(dict(active=c.active, state=c.state, message=c.paused or c.reason,
+        message = c.paused or c.reason
+        if self.obstacle_mode == 'static_test':
+            message = STATIC_TEST_WARNING + '; ' + message
+        status = json.dumps(dict(active=c.active, state=c.state, message=message,
+                                 obstacle_mode=self.obstacle_mode,
+                                 navigation_map_topic=self.navigation_map_topic,
+                                 dynamic_obstacles_used=self.obstacle_mode == 'dynamic',
+                                 control_pose_source='latest_fastlio', control_pose=self.control_pose_status,
+                                 **self.start_status(),
                                  stg=c.stg, recovery_count=c.recovery_count,
                                  recovery_limit=c.recovery_limit, planning_failures=c.planning_failures,
                                  recovery_direction=c.recovery_direction,
@@ -443,10 +567,12 @@ def main():
     parser.add_argument('--record-stg-errors', action='store_true',
                         help='Save per-STG poses, anomalies and valid XY L2 errors as JSONL')
     parser.add_argument('--experiment-dir', type=Path, help='Internal: existing experiment session directory')
+    parser.add_argument('--obstacle-mode', choices=OBSTACLE_MODES, default='dynamic',
+                        help='static_test ignores realtime obstacles; controlled static-map experiments only')
     args = parser.parse_args()
     rclpy.init()
     node = NavigationNode(args.config, record_stg_errors=args.record_stg_errors,
-                          experiment_dir=args.experiment_dir)
+                          experiment_dir=args.experiment_dir, obstacle_mode=args.obstacle_mode)
     def interrupted(*_):
         raise KeyboardInterrupt
     # Keep ROS alive until the final zero velocity has been published.

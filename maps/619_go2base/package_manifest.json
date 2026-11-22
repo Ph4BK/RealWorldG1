@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "frame": "map",
+  "static_bev": "bev_occupancy.npz",
+  "localization_map": "map.pcd",
+  "runtime_config": "runtime_live_bev.yaml",
+  "runtime_initialization_ready": true,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2286,
+      "sha256": "7646420754f94715979a5248f74eff97946ed1abd08131df91fc5f6533f20e9e"
+    },
+    {
+      "path": "T_map_from_scene.txt",
+      "bytes": 111,
+      "sha256": "0733c3e251f6d80def19eeed959d5297d2bd8ea9a80d6d59f7fc759b0bfdcb8a"
+    },
+    {
+      "path": "bev_config.json",
+      "bytes": 1892,
+      "sha256": "eb6393bdd03526e157538c0d68cfde83d30c8485bbbc2ca52cce97cff387374b"
+    },
+    {
+      "path": "bev_occupancy.npz",
+      "bytes": 191200,
+      "sha256": "bc56e8d1e48fd363101723d10c5e392d22b40f65c8729fe88b11a0c8bf37effd"
+    },
+    {
+      "path": "bev_preview.png",
+      "bytes": 84118,
+      "sha256": "b050b37f9bcba814bf1271dedad6016164e3af01e5069e1aca054f3c75844210"
+    },
+    {
+      "path": "map.pcd",
+      "bytes": 7145148,
+      "sha256": "bdfb87e5b5eefbdcc824c4ec099791bb86a79c01a4c1127c066622e9033f6f33"
+    },
+    {
+      "path": "metadata.yaml",
+      "bytes": 3760,
+      "sha256": "8b3044c1df75fce3abd73f36486c74a943cc2bc5d346b9910c126ca2a9268f92"
+    },
+    {
+      "path": "no_go.npz",
+      "bytes": 1274,
+      "sha256": "02d30ff92d8ee5e43023313dd0e7289d2d89fd742d03395fcfcac6618e647358"
+    },
+    {
+      "path": "provenance/build_g1_619_map.py",
+      "bytes": 29808,
+      "sha256": "161f638b0d93ea0fc657f64aa12d9fbfa27e6519bc9662316df2685ff1a21f7a"
+    },
+    {
+      "path": "provenance/build_static_bev.py",
+      "bytes": 12375,
+      "sha256": "257213986e9eada1a449d7fc44b5991ae331055aeb358b77233d2b915759dc99"
+    },
+    {
+      "path": "provenance/go2_grid_reference.npz",
+      "bytes": 191200,
+      "sha256": "bc56e8d1e48fd363101723d10c5e392d22b40f65c8729fe88b11a0c8bf37effd"
+    },
+    {
+      "path": "provenance/live_bev_803_reference.yaml",
+      "bytes": 1492,
+      "sha256": "abb84937bbabeb0031cebfd21339b537b2ed5c688e9bb275fea2a7a105a293b3"
+    },
+    {
+      "path": "provenance/source_map_README.md",
+      "bytes": 2193,
+      "sha256": "15f26e23c8308569fd959c98c981fe836a229cb10338bf73940b12f16edfdf40"
+    },
+    {
+      "path": "runtime_live_bev.yaml",
+      "bytes": 920,
+      "sha256": "1e8e0fe9289f29ebb772e63998be2e6014e3e7607e6a914b88734b9ef89310f5"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 1868,
+      "sha256": "221f42adaeda06e51395df155f78e1a79f5e444de851c8ee618adf257742a7dd"
+    }
+  ],
+  "integrity_note": "Manifest lists artifacts; checksums additionally covers manifest; neither hashes itself"
+}

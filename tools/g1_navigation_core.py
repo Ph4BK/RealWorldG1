@@ -30,6 +30,13 @@ class Navigation:
     small_turn_angle = .4
     min_turn_angle = .03
     turn_settle = .75
+    # Closed-loop turn stop (2026-11-21): the fixed settle is a lower bound; walk
+    # only starts once the measured body yaw rate is small (or the extra bound
+    # expires). Measured on the 619 run: the body still turned 27-55 deg/s for
+    # ~1.2 s after the zero command while walk began at 0.76 s.
+    turn_stop_yaw_rate = .15          # rad/s, approx 8.6 deg/s
+    turn_stop_window = .30            # s of pose history used for the rate
+    turn_stop_extra = 1.5             # s beyond turn_settle before giving up
     walk_settle = .50
     goal_tol = .50
     plan_retry_s = 1.
@@ -50,6 +57,7 @@ class Navigation:
         self.reset_recovery()
         self.pose = None
         self.pose_time = self.map_time = -math.inf
+        self.yaw_samples = deque(maxlen=128)
         self.active = False
         self.state = 'idle'
         self.reason = 'Ready'
@@ -148,6 +156,34 @@ class Navigation:
         self.until = now + seconds
         return (0., 0.)
 
+    def yaw_rate(self, window=None):
+        """Measured yaw rate (rad/s) from recent poses; None when unknown."""
+        window = self.turn_stop_window if window is None else window
+        if len(self.yaw_samples) < 2:
+            return None
+        t1, y1 = self.yaw_samples[-1]
+        for t0, y0 in reversed(self.yaw_samples):
+            span = t1 - t0
+            if span >= window:
+                return wrap(y1-y0)/span if span > 1e-3 else None
+        return None
+
+    def turn_settled(self, now):
+        """Fixed settle elapsed AND the body has effectively stopped turning."""
+        if now < self.until:
+            return False
+        rate = self.yaw_rate()
+        if rate is None:
+            return True                      # no measurement: keep original timing
+        if abs(rate) <= self.turn_stop_yaw_rate:
+            return True
+        if now - self.until >= self.turn_stop_extra:
+            if self.recorder is not None:
+                self.recorder.anomaly('Turn settle bound reached at %.1f deg/s'
+                                      % math.degrees(rate))
+            return True
+        return False
+
     def begin_walk(self, now):
         if self.goal_reached():
             self.segment_normal = False
@@ -181,6 +217,9 @@ class Navigation:
     def tick(self, now):
         if not self.active:
             return None
+        if self.pose is not None:
+            if not self.yaw_samples or self.pose[2] != self.yaw_samples[-1][1]:
+                self.yaw_samples.append((now, self.pose[2]))
         self.paused = self.input_problem(now)
         if self.paused:
             self.segment_normal = False
@@ -303,7 +342,7 @@ class Navigation:
             if done:
                 return self.wait('turn_settle', now, self.turn_settle)
             return (0., self.turn_sign*self.omega)
-        if self.state == 'walk_start' or (self.state == 'turn_settle' and now >= self.until):
+        if self.state == 'walk_start' or (self.state == 'turn_settle' and self.turn_settled(now)):
             if self.recorder is not None:
                 self.recorder.turn_settled(self.pose)
             return self.begin_walk(now)

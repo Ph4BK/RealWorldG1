@@ -13,6 +13,7 @@ from rclpy.action import ActionServer, GoalResponse, CancelResponse
 from rclpy.task import Future
 
 from g1_navigation_core import wrap
+from posnav_fmm.errors import StartInObstacle
 
 
 @dataclass
@@ -91,9 +92,12 @@ class NavigationAction:
             problem = n.control.input_problem(time.monotonic())
             if problem or n.recording_error or (n.experiment and n.experiment.writer.error):
                 raise ValueError(problem or n.recording_error or 'Experiment recorder failed')
+            n.require_start_free()
         except ValueError as exc:
             n.get_logger().warning('Action goal rejected: '+str(exc))
-            self.event('action_goal_rejected', reason=str(exc))
+            self.event('action_goal_rejected', reason=str(exc),
+                       reason_code='start_in_obstacle' if isinstance(exc, StartInObstacle) else 'goal_rejected')
+            n.publish_status()
             return GoalResponse.REJECT
         self.reserved = True
         return GoalResponse.ACCEPT
@@ -118,7 +122,7 @@ class NavigationAction:
                 timeout_s=g.timeout, max_speed=g.max_speed,
                 map_from_scene_xy_yaw=self.transform)
         except Exception as exc:
-            run.reason = 'start_failed'
+            run.reason = 'start_in_obstacle' if isinstance(exc, StartInObstacle) else 'start_failed'
             self.node.cancel('Action start failed: '+str(exc))
 
     async def execute(self, handle):
@@ -182,6 +186,7 @@ class NavigationAction:
                    'Localization stopped or map reset': 'localization_stopped',
                    'Navigation process stopped': 'shutdown',
                    'recovery_exhausted': 'recovery_exhausted',
+                   'start_in_obstacle': 'start_in_obstacle',
                    'No valid STG; navigation stopped': 'no_stg'}
         reason = run.reason or ('arrived' if arrived else reasons.get(n.control.reason, 'navigation_error'))
         if not fresh:

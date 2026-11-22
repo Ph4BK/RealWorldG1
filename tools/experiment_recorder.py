@@ -198,6 +198,7 @@ class ExperimentSession:
         files = ['tools/g1_navigation_core.py', 'tools/g1_navigation_node.py', 'tools/g1_action_server.py',
                  'tools/stg_error_recorder.py', 'tools/experiment_recorder.py', 'tools/g1_final_approach.py',
                  'tools/live_bev_core.py', 'tools/live_bev_node.py', 'tools/g1_live_desktop.py',
+                 'tools/g1_control_pose.py',
                  'tools/run_g1_live_bev.sh', 'tools/run_live_bev.sh',
                  'posnav/deploy/start_desktop.sh', 'posnav/deploy/env.sh',
                  'fastlio/rviz/live_bev.rviz']

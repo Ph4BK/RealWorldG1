@@ -175,18 +175,14 @@ class NavigationNodeTest(unittest.TestCase):
         self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0., -.5, 0.])
         self.assertAlmostEqual(self.node.control.control_hz, 50.)
 
-    def test_pose_source_stamp_is_not_checked(self):
+    def test_internal_pose_application_preserves_validated_sample_time(self):
         p = self.pose()
         p.header.stamp.sec = 100
-        self.node.on_pose(p)
-        t = self.node.control.pose_time
-        p.header.stamp.sec = 0
-        with patch('g1_navigation_node.time.monotonic', return_value=t+1.):
-            self.node.on_pose(p)
-        self.assertEqual(self.node.control.pose_time, t+1.)
-        with patch('g1_navigation_node.time.monotonic', return_value=t+2.):
-            self.node.on_pose(p)
-        self.assertEqual(self.node.control.pose_time, t+2.)
+        # on_pose is now internal: the raw odometry/reference callbacks validate
+        # source progress, expiry and epochs (test_control_pose.py).
+        self.node.on_pose(p, sample_time=42.)
+        self.assertEqual(self.node.control.pose_time, 42.)
+        self.assertNotIn('/g1/live_bev/robot', [s.topic_name for s in self.node.subscriptions])
 
     def test_republishing_map_does_not_refresh_fusion_age(self):
         m = self.grid()
@@ -306,7 +302,7 @@ class NavigationNodeTest(unittest.TestCase):
         self.node.tick()
         self.assertEqual(len(self.commands), count)
 
-    def test_inflated_start_prepares_recovery_and_skips_it_when_map_clears(self):
+    def test_inflated_start_rejects_without_motion_and_requires_new_start_after_map_clears(self):
         self.node.on_goal(self.pose(3., 0.))
         self.node.on_pose(self.pose())
         m = self.grid()
@@ -314,21 +310,36 @@ class NavigationNodeTest(unittest.TestCase):
         data[45,40] = 100  # Inflation reaches the robot's start cell (40,40).
         m.data = data.ravel().tolist()
         self.node.on_map(m)
-        self.assertTrue(self.node.start(None, Trigger.Response()).success)
+        response=self.node.start(None, Trigger.Response())
+        self.assertFalse(response.success)
+        self.assertIn('start_in_obstacle',response.message)
         self.node.tick()
         c = self.node.control
-        self.assertEqual(c.state, 'recovery_prepare')
+        self.assertEqual(c.state, 'idle')
         self.assertIsNone(c.stg)
-        self.assertIn('Preparing recovery', c.reason)
-        self.assertEqual(json.loads(self.commands[-1].parameter)['velocity'], [0.,0.,0.])
+        self.assertEqual(self.commands,[])
+        status=json.loads(self.node.last_status)
+        self.assertIs(status['start_free'],False)
+        self.assertGreater(status['nearest_free_cell_distance_m'],0.)
         self.node.on_map(self.grid())
         self.node.on_pose(self.pose())
         self.node.tick()
-        self.assertEqual(c.state, 'plan')
+        self.assertEqual(c.state, 'idle')
         self.assertEqual(c.recovery_count, 0)
+        self.assertTrue(self.node.start(None, Trigger.Response()).success)
         self.node.tick()
         self.assertEqual(c.state, 'walk_start')
         self.assertIsNotNone(c.stg)
+
+    def test_new_obstacle_under_active_robot_stops_before_recovery_or_turn(self):
+        self.ready()
+        m=self.grid();data=np.zeros((200,200),np.int8);data[45,40]=100
+        m.data=data.ravel().tolist();self.node.on_map(m)
+        self.node.tick()
+        self.assertFalse(self.node.control.active)
+        self.assertEqual(self.node.control.reason,'start_in_obstacle')
+        self.assertEqual(self.node.control.recovery_count,0)
+        self.assertTrue(all(json.loads(c.parameter)['velocity']==[0.,0.,0.] for c in self.commands))
 
     def test_blocked_segment_status_and_retry_recovery(self):
         self.ready()

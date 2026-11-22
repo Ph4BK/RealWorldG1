@@ -1,0 +1,68 @@
+{
+  "offline_geometry_passed": true,
+  "runtime_initialization_ready": true,
+  "motion_or_localization_accuracy_validated": false,
+  "source_points": 446561,
+  "projection_not_applicable": true,
+  "occupied_cells": 107054,
+  "shape_rows_cols": [
+    400,
+    474
+  ],
+  "origin_xy_m": [
+    -12.851,
+    -12.56
+  ],
+  "resolution_m": 0.05,
+  "bev_source": "go2-grid",
+  "fixed_no_go_cells": 87894,
+  "pcd_projection_occupied_iou": null,
+  "production_rolling_bev_occupied_iou": null,
+  "projection_metric_note": "Source consistency only, NOT localization accuracy; no PCD projection check for inherited grid",
+  "go2_reference_occupied_cells": 107054,
+  "go2_reference_iou": 1.0,
+  "go2_reference_note": "Cleaned Go2 grid inherited byte-for-byte; unexpanded",
+  "consumer_file_loader": {
+    "kind": "Exact LiveBEV.__init__ file-loading block; NOT a full ROS node test",
+    "source_sha256": "77ba9e872eded2d8965dbdc250497ded626a450480976ab8a7a8a7d80d2ccbd6",
+    "origin_resolution_assertions_passed": true,
+    "imu_height_missing_rejected": false,
+    "initialization_height_usable": true
+  },
+  "initial_imu_height": {
+    "value_m": 1.24,
+    "status": "provided",
+    "source": "tape_measure_2026-11-19 lidar dome centre 124cm / waist 64cm; user-approved IMU-height approximation, standing posture",
+    "applies_to": "619 G1 navigation standing posture"
+  },
+  "transform_map_from_scene": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "boundary_policy": "Only points within the explicit half-open source-grid XY ROI enter BEV; ICP PCD unchanged",
+  "all_nonoccupied_cells_are_free": true,
+  "unobserved_space_is_not_certified_free": true,
+  "source_inputs_unchanged": true
+}

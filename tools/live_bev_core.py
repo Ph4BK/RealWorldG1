@@ -1,7 +1,84 @@
 """ROS-independent rolling BEV fusion and live-pose initialization geometry."""
 from collections import deque
+import hashlib
+from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
+
+
+OBSTACLE_MODES = ('dynamic', 'static_test')
+STATIC_TEST_WARNING = 'STATIC TEST - REALTIME OBSTACLES IGNORED'
+
+
+def obstacle_map_topic(mode):
+    """Startup-only source selection; unknown modes must never silently fall back."""
+    if mode not in OBSTACLE_MODES:
+        raise ValueError('Unknown obstacle mode: %r' % mode)
+    return '/g1/bev/task' if mode == 'dynamic' else '/g1/bev/static_test'
+
+
+def room_no_go(shape, origin, res, bounds):
+    """Inherit Go2 room policy exactly, including its grid-anchor convention."""
+    bounds = np.asarray(bounds, dtype=float)
+    if (bounds.shape != (4,) or not np.isfinite(bounds).all() or
+            bounds[0] >= bounds[1] or bounds[2] >= bounds[3]):
+        raise ValueError('Invalid explicit room_bounds for fixed no-go policy')
+    x = origin[0] + np.arange(shape[1]) * res
+    y = origin[1] + np.arange(shape[0]) * res
+    return ~((x[None, :] >= bounds[0]) & (x[None, :] <= bounds[1]) &
+             (y[:, None] >= bounds[2]) & (y[:, None] <= bounds[3]))
+
+
+def load_fixed_no_go(map_dir, config, shape, origin, res):
+    """Legacy maps have no policy; declared policy must load and validate loudly."""
+    specification = config.get('fixed_no_go')
+    if specification is None:
+        return None
+    path = Path(specification['file'])
+    if path.is_absolute() or len(path.parts) != 1:
+        raise ValueError('Fixed no-go file must be inside the map package')
+    path = Path(map_dir) / path
+    if hashlib.sha256(path.read_bytes()).hexdigest() != specification['sha256']:
+        raise ValueError('Fixed no-go checksum mismatch')
+    with np.load(path, allow_pickle=False) as data:
+        mask = data['no_go'].copy()
+        if (mask.dtype != np.bool_ or mask.shape != tuple(shape) or
+                not np.array_equal(data['origin'], origin) or float(data['res']) != res):
+            raise ValueError('Fixed no-go grid geometry/dtype mismatch')
+    if specification.get('source') == 'go2_room_bounds_grid_anchor_inclusive':
+        expected = room_no_go(shape, origin, res, specification['room_bounds_xmin_xmax_ymin_ymax_m'])
+        if not np.array_equal(mask, expected):
+            raise ValueError('Fixed no-go differs from declared room policy')
+    else:
+        raise ValueError('Unknown fixed no-go source')
+    return mask
+
+
+def grid_start_status(free, origin, res, xy, nearest=True):
+    """Inspect the CURRENT position, never snap it or mutate the map."""
+    result = dict(start_free=None, start_rejection_reason='start_unknown',
+                  nearest_free_cell_distance_m=None, nearest_free_xy_m=None)
+    if free is None or xy is None:
+        return result
+    xy = np.asarray(xy, dtype=float)
+    if xy.shape != (2,) or not np.isfinite(xy).all():
+        return result
+    col, row = np.floor((xy - origin) / res).astype(int)
+    inside = 0 <= row < free.shape[0] and 0 <= col < free.shape[1]
+    good = bool(inside and free[row, col])
+    result.update(start_free=good, start_rejection_reason=(
+        '' if good else 'start_in_obstacle' if inside else 'start_outside_map'))
+    if good:
+        result['nearest_free_cell_distance_m'] = 0.
+    elif nearest:
+        rows, cols = np.nonzero(free)
+        if len(rows):
+            points = np.column_stack([cols + .5, rows + .5]) * res + origin
+            distances = np.sum((points - xy) ** 2, axis=1)
+            index = int(np.argmin(distances))
+            result.update(nearest_free_cell_distance_m=float(np.sqrt(distances[index])),
+                          nearest_free_xy_m=points[index].tolist())
+    return result
 
 
 def checked_transform(value):
@@ -43,7 +120,7 @@ def initial_map_from_odom(x, y, yaw, z, imu_samples, odom_pose):
 class RollingBEV:
     def __init__(self, static, origin, res, window=10, min_points=2,
                  z_min=.05, z_max=1.3, radius=2.,
-                 max_window_age=2., inner_radius=.3):
+                 max_window_age=2., inner_radius=.3, no_go=None):
         self.static = np.asarray(static, dtype=bool).copy()
         self.origin = np.asarray(origin, dtype=float)
         self.res = float(res)
@@ -58,11 +135,18 @@ class RollingBEV:
         if not np.isfinite(self.inner_radius) or not 0 <= self.inner_radius < self.radius:
             raise ValueError('Inner radius must be finite, nonnegative and smaller than update radius')
         self.max_window_age = max_window_age
+        self.no_go = np.zeros_like(self.static) if no_go is None else np.asarray(no_go).copy()
+        if self.no_go.dtype != np.bool_ or self.no_go.shape != self.static.shape:
+            raise ValueError('Fixed no-go must be a same-shape boolean mask')
+        self.no_go.setflags(write=False)
+        self.no_go_cells = int(self.no_go.sum())
+        self.last_no_go_protected_cells = 0
         rows, cols = np.indices(self.static.shape)
         self.x = self.origin[0] + (cols + .5) * self.res
         self.y = self.origin[1] + (rows + .5) * self.res
         self.frames = deque(maxlen=window)
         self.task = self.static.copy()
+        self.task |= self.no_go
         self.local = np.zeros_like(self.static)
         self.mask = np.zeros_like(self.static)
         self.last_stamp = None
@@ -76,6 +160,8 @@ class RollingBEV:
     def reset(self):
         self.pause()
         self.task[:] = self.static
+        self.task |= self.no_go
+        self.last_no_go_protected_cells = 0
         self.last_stamp = None
 
     def region(self, x, y):
@@ -84,10 +170,16 @@ class RollingBEV:
         return (radius >= self.inner_radius) & (radius <= self.radius)
 
     def clear_initial_region(self, x, y):
-        """One-time session initialization, invoked by the first valid pose output."""
+        """Explicit legacy opt-in only. Fixed no-go is never cleared."""
         if not np.isfinite([x, y]).all():
             raise ValueError('Initial clearing position must be finite')
-        self.task[np.hypot(self.x - x, self.y - y) <= self.inner_radius] = False
+        disk = np.hypot(self.x - x, self.y - y) <= self.inner_radius
+        self.last_no_go_protected_cells = int((disk & self.no_go).sum())
+        clear = disk & ~self.no_go
+        cleared = int((self.task & clear).sum())
+        self.task[clear] = False
+        self.task |= self.no_go
+        return cleared
 
     def add(self, stamp, points_map, pose_xy_yaw):
         """Return True only after a new, nonempty, valid frame commits a fusion."""
@@ -125,4 +217,6 @@ class RollingBEV:
         self.local = sum(c for _, c in self.frames) >= self.min_points
         self.mask = self.region(*pose_xy_yaw[:2])
         self.task[self.mask] = self.local[self.mask]
+        self.last_no_go_protected_cells = int((self.mask & self.no_go & ~self.local).sum())
+        self.task |= self.no_go
         return True
