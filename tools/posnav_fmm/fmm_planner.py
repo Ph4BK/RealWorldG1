@@ -51,11 +51,21 @@ class FMMPlanner():
 
         self.du = int(self.step_size / (self.scale * 1.))
         self.fmm_dist = None
+        self.max_cost = 1.
 
-    def set_multi_goal(self, goal_map, visited=None):
+    def set_multi_goal(self, goal_map, visited=None, cost=None):
         traversible_ma = ma.masked_values(self.traversible * 1, 0)
         traversible_ma[goal_map == 1] = 0
-        dd = skfmm.distance(traversible_ma, dx=1)
+        if cost is None:
+            self.max_cost = 1.
+            dd = skfmm.distance(traversible_ma, dx=1)
+        else:
+            cost = np.asarray(cost, dtype=float)
+            if (cost.shape != self.traversible.shape or not np.isfinite(cost).all() or
+                    np.any(cost < 1.)):
+                raise ValueError('FMM cost must be a finite same-shape array >= 1')
+            self.max_cost = float(cost.max())
+            dd = skfmm.travel_time(traversible_ma, 1./cost, dx=1)
         dd = ma.filled(dd, np.max(dd) + 1)
         if visited is not None:
             dd += visited * 0.5
@@ -91,7 +101,9 @@ class FMMPlanner():
 
         subset -= subset[self.du, self.du]
         ratio1 = subset / dist_mask
-        subset[ratio1 < -1.5] = 1
+        # Weighted cost has a larger legitimate gradient than metric distance.
+        # Keep the old numerical rejection exactly when the feature is off.
+        subset[ratio1 < -1.5*self.max_cost] = 1
 
         subset[self.du, self.du] = (self.fmm_dist.shape[0] ** 2 - subset[self.du, self.du]) / 5
 

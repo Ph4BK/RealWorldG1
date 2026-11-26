@@ -187,6 +187,16 @@ class NavigationAction:
                    'Navigation process stopped': 'shutdown',
                    'recovery_exhausted': 'recovery_exhausted',
                    'start_in_obstacle': 'start_in_obstacle',
+                   'final_goal_behind': 'final_goal_behind',
+                   'fine_position_settle_timeout': 'fine_position_settle_timeout',
+                   'fine_entry_align_timeout': 'fine_entry_align_timeout',
+                   'fine_lateral_exceeded': 'fine_lateral_exceeded',
+                   'fine_passage_blocked': 'fine_passage_blocked',
+                   'coarse_turn_timeout': 'coarse_turn_timeout',
+                   'coarse_turn_align_limit': 'coarse_turn_align_limit',
+                   'walk_guard_align_limit': 'walk_guard_align_limit',
+                   'walk_guard_align_timeout': 'walk_guard_align_timeout',
+                   'walk_guard_stop_timeout': 'walk_guard_stop_timeout',
                    'No valid STG; navigation stopped': 'no_stg'}
         reason = run.reason or ('arrived' if arrived else reasons.get(n.control.reason, 'navigation_error'))
         if not fresh:

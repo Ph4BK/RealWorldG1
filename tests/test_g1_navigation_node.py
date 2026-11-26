@@ -52,6 +52,103 @@ class NavigationNodeTest(unittest.TestCase):
         self.assertIsNone(self.node.error_log)
         self.assertIsNone(self.node.control.recorder)
 
+    def test_fine_pre_candidates_preserve_free_grid_and_full_segment_checks(self):
+        from g1_final_approach import FineApproachConfig
+        self.ready()
+        self.node.control.fine = FineApproachConfig(fine_pre_fallback=True)
+        goal = (3., 1., 0.)
+        r, c = self.node.cell((2.7, 1.))
+        self.node.free[r, c] = False
+        original = self.node.free.copy()
+        route = self.node.navigation_route(goal)
+        self.assertAlmostEqual(route['pre'][0], 2.8)
+        self.assertEqual([v['accepted'] for v in route['attempts']], [False, True])
+        np.testing.assert_array_equal(self.node.free, original)
+        # Block only the last complete segment, leaving endpoints free.
+        r, c = self.node.cell((2.93, 1.))
+        self.node.free[r, c] = False
+        route = self.node.navigation_route(goal)
+        self.assertIsNone(route['pre'])
+        self.assertEqual(len(route['attempts']), 3)
+        self.assertIn('segment', route['attempts'][-1]['reason'])
+        self.assertTrue(self.node.free[self.node.cell(goal[:2])])
+
+    def test_fine_pre_and_no_pre_still_reject_occupied_start_and_goal(self):
+        from g1_final_approach import FineApproachConfig
+        from posnav_fmm.errors import StartInObstacle
+        self.ready()
+        for enabled in (False, True):
+            self.node.control.fine = FineApproachConfig(fine_pre_fallback=enabled)
+            self.node.free[self.node.cell(self.node.control.pose[:2])] = False
+            with self.assertRaises(StartInObstacle):
+                self.node.navigation_route((3., 1., 0.))
+            self.node.free[self.node.cell(self.node.control.pose[:2])] = True
+            self.node.free[self.node.cell((3., 1.))] = False
+            with self.assertRaisesRegex(ValueError, 'Final goal'):
+                self.node.navigation_route((3., 1., 0.))
+            self.node.free[self.node.cell((3., 1.))] = True
+
+    def test_post_fine_observation_is_passive_and_never_reuses_old_sample(self):
+        from unittest.mock import Mock
+        self.ready()
+        self.node.control.active = False
+        self.node.control.final_goal = (1., 0., .3)
+        self.node.experiment = Mock()
+        self.node.post_fine = dict(due=10., final_goal=(1., 0., .3), direction=(1., 0.),
+                                  completion_stamp=1, origin_trial_id='trial_0001')
+        self.node.control.pose = (.9, .02, .3)
+        self.node.control.pose_time = 9.9
+        self.node.pose_source_stamp = 2
+        with patch('g1_navigation_node.time.monotonic', return_value=10.05):
+            self.node.record_post_fine()
+        self.node.experiment.event.assert_not_called()
+        self.node.control.pose_time = 10.04
+        with patch('g1_navigation_node.time.monotonic', return_value=10.05):
+            self.node.record_post_fine()
+        args = self.node.experiment.event.call_args
+        self.assertEqual(args.args[0], 'fine_post_completion_3s')
+        self.assertEqual(args.kwargs['origin_trial_id'], 'trial_0001')
+        self.assertEqual(args.kwargs['source_stamp_ns'], 2)
+        self.assertAlmostEqual(args.kwargs['projected_remaining_m'], .1)
+        self.assertFalse(self.commands)
+        self.assertIsNone(self.node.post_fine)
+        self.node.experiment = None
+
+    def test_post_fine_missing_sample_or_new_task_is_explicitly_unavailable(self):
+        from unittest.mock import Mock
+        self.ready()
+        for active, now, reason in ((False, 10.4, 'no_fresh_sample_after_3s'),
+                                     (True, 9., 'new_navigation_started')):
+            self.node.experiment = Mock()
+            self.node.control.active = active
+            self.node.control.pose_time = 8.
+            self.node.post_fine = dict(due=10., final_goal=(1., 0., 0.), direction=(1., 0.),
+                                      completion_stamp=1, origin_trial_id='old_trial')
+            with patch('g1_navigation_node.time.monotonic', return_value=now):
+                self.node.record_post_fine()
+            args = self.node.experiment.event.call_args
+            self.assertEqual(args.args[0], 'fine_post_completion_unavailable')
+            self.assertEqual(args.kwargs['reason'], reason)
+            self.assertFalse(self.commands)
+        self.node.control.active = False
+        self.node.experiment = None
+
+    def test_map_reset_cancel_invalidates_pending_post_completion_observation(self):
+        from unittest.mock import Mock
+        self.ready()
+        self.node.control.active = False
+        self.node.experiment = Mock()
+        self.node.experiment.writer.error = None
+        self.node.control.recorder = STGErrorRecorder()
+        self.node.post_fine = dict(due=10., origin_trial_id='old_map_trial')
+        self.node.cancel('Localization stopped or map reset')
+        self.assertIsNone(self.node.post_fine)
+        event = [c for c in self.node.experiment.event.call_args_list
+                 if c.args[0] == 'fine_post_completion_unavailable'][-1]
+        self.assertIn('map reset', event.kwargs['reason'])
+        self.assertEqual(event.kwargs['origin_trial_id'], 'old_map_trial')
+        self.node.experiment = None
+
     def test_recording_option_creates_session_file_without_starting_navigation(self):
         with tempfile.TemporaryDirectory() as directory:
             node = NavigationNode(ROOT/'fastlio/config/live_bev.yaml',
@@ -64,6 +161,62 @@ class NavigationNodeTest(unittest.TestCase):
             finally:
                 node.error_log.close()
                 node.destroy_node()
+
+    def test_runtime_parameters_record_actual_instance_and_startup_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)
+            (path/'session.json').write_text(json.dumps(dict(session_id='round1_test',monotonic_origin=time.monotonic())))
+            node=NavigationNode(ROOT/'fastlio/config/live_bev.yaml',experiment_dir=directory,
+                walk_guard=True,near_stg_no_realign=True,coarse_turn_profile=True,
+                guard_reenter_deg=20.,fmm_inflation_cells=7,fmm_step_cells=20,coarse_omega=.5)
+            try:
+                node.close_recordings()
+                data=json.loads((path/'assets/config/navigation_parameters.json').read_text())
+                actual=data['runtime_parameters']
+                self.assertEqual(actual['planning']['fmm_inflation_cells'],7)
+                self.assertEqual(actual['control']['omega'],.5)
+                self.assertEqual(actual['walk_guard']['reenter_deg'],20.)
+                self.assertEqual(actual['motion_policy']['coarse_turn_stop_deg'],3.)
+                self.assertEqual(len(actual['startup_source_sha256_lf']['g1_navigation_core.py']),64)
+                node.control.omega=.4
+                node.publish_status()
+                state=json.loads(node.last_status)
+                self.assertEqual(state['runtime_parameters']['control']['omega'],.4)
+                self.assertEqual(state['navigation_options']['coarse_omega'],.5)
+                self.assertIn('motion_diagnostics',state)
+                self.assertFalse(node.control.active)
+            finally:node.destroy_node()
+
+    def test_stg_clearance_decision_reaches_actual_status_and_trial_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)
+            (path/'session.json').write_text(json.dumps(dict(session_id='stg_gate_test',monotonic_origin=time.monotonic())))
+            node=NavigationNode(ROOT/'fastlio/config/live_bev.yaml',experiment_dir=directory,stg_clearance_m=.4)
+            try:
+                grid=np.zeros((140,140),bool);grid[5:130,[50,65]]=True
+                msg=OccupancyGrid();msg.header.frame_id='map';msg.header.stamp=node.get_clock().now().to_msg()
+                msg.info.width=msg.info.height=140;msg.info.resolution=.05;msg.info.origin.orientation.w=1.
+                msg.data=(grid.astype(np.int8)*100).ravel().tolist();node.on_map(msg)
+                node.control.pose_source_stamp_ns=123456789
+                start=(2.925,1.025);goal=(2.925,5.025)
+                node.experiment.begin((*goal,0.),(*start,0.),123456789,None)
+                plan=node.plan(start,goal);node.publish_status()
+                state=json.loads(node.last_status)
+                decision=state['stg_selection']
+                self.assertEqual(state['runtime_parameters']['clearance']['stg_clearance_m'],.4)
+                self.assertEqual(decision['selected_macro_index'],1)
+                self.assertTrue(decision['first_macro_exception'])
+                self.assertEqual(decision['task_map_sha256'],state['task_map_identity']['sha256'])
+                self.assertEqual(decision['pose_source_stamp_ns'],123456789)
+                self.assertFalse(node.control.active)
+                node.close_recordings()
+                row=json.loads((path/'trials/trial_0001/planning.jsonl').read_text())
+                self.assertEqual(row['stg_selection'],decision)
+                self.assertEqual(row['selected_stg'],list(plan.stg_xy))
+                parameters=json.loads((path/'assets/config/navigation_parameters.json').read_text())
+                self.assertEqual(parameters['runtime_parameters']['clearance']['stg_clearance_m'],.4)
+            finally:
+                node.close_recordings();node.destroy_node()
 
     def test_recording_flush_follows_stop_publication(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -109,7 +262,7 @@ class NavigationNodeTest(unittest.TestCase):
             self.node.tick()
             c = self.node.control
             c.until = 0.
-            with patch.object(c, 'clear', side_effect=ValueError('test execution failure')):
+            with patch.object(c, 'passage_clear', side_effect=ValueError('test execution failure')):
                 self.node.tick()
             row = json.loads(self.node.error_log.path.read_text())
             self.assertIn('Navigation stopped: test execution failure', row['anomalies'])

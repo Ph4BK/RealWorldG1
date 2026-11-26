@@ -2,6 +2,8 @@
 import math
 from collections import deque
 from posnav_fmm.errors import PlanningRetry, GoalUnreachable
+from g1_walk_guard import WalkGuard, FreshSampleWindow
+from g1_motion_policy import MotionPolicy
 
 
 def velocity_xyz(velocity):
@@ -24,6 +26,7 @@ class Navigation:
     map_timeout = 1.
     speed = .5
     omega = 1.
+    stop_clear = None              # 2026-11-26: 停止侧判据（0.20m 膨胀），规划仍用 0.35m
     left_tol = .12
     right_tol = -.18
     epsilon = .150
@@ -47,14 +50,16 @@ class Navigation:
     recovery_limit = 3
     recovery_failure_limit = 3
 
-    def __init__(self, plan, clear, recorder=None, recovery=None):
+    def __init__(self, plan, clear, recorder=None, recovery=None, walk_guard=None, motion=None):
         self.plan = plan
         self.clear = clear
         self.recorder = recorder
         self.recovery = recovery
+        self.walk_guard = None if walk_guard is None else WalkGuard(walk_guard)
         self.map_revision = None
         self.recovery_events = deque()
         self.reset_recovery()
+
         self.pose = None
         self.pose_time = self.map_time = -math.inf
         self.yaw_samples = deque(maxlen=128)
@@ -64,6 +69,110 @@ class Navigation:
         self.paused = ''
         self.stg = None
         self.origin = self.direction = None
+        self.configure_motion(motion or MotionPolicy())
+
+    def configure_motion(self, policy, legacy_omega=None, no_turn_out=False):
+        if self.active:raise ValueError('Motion policy cannot change during navigation')
+        if not isinstance(policy,MotionPolicy) or not isinstance(no_turn_out,bool):
+            raise ValueError('Expected validated motion policy and boolean excursion switch')
+        if legacy_omega is not None and (isinstance(legacy_omega,bool) or not math.isfinite(legacy_omega) or not 0<legacy_omega<=1.):
+            raise ValueError('Invalid legacy coarse omega')
+        if (policy.near_stg_no_realign or policy.coarse_turn_profile) and self.walk_guard is None:
+            raise ValueError('Round-one motion candidates require --walk-guard')
+        self.motion = policy
+        self.omega = type(self).omega if legacy_omega is None else legacy_omega
+        self.turn_out_enabled = not no_turn_out
+        self._reset_motion_segment()
+
+    def _reset_motion_segment(self):
+        self.motion_stg = None
+        self.motion_origin = self.motion_direction = None
+        self.near_stg_latched = False
+        self.profile_attempts = 0
+        self.profile_heading = self.profile_clock_start = None
+        self.profile_turn_sign = 0.
+        self.profile_samples = FreshSampleWindow()
+
+    def _motion_segment(self):
+        if ((self.motion.near_stg_no_realign or self.motion.coarse_turn_profile) and
+                self.motion_stg == self.stg and self.motion_direction is not None):
+            return  # A repeated plan for the same point must not clear its latch/budget.
+        self._reset_motion_segment()
+        self.motion_stg = self.stg
+        self.motion_origin = tuple(self.pose[:2])
+        delta = tuple(g-p for g,p in zip(self.stg,self.motion_origin))
+        distance = math.hypot(*delta)
+        self.motion_direction = tuple(d/distance for d in delta) if distance else (0.,0.)
+
+    def motion_remaining(self):
+        if self.motion_direction is None or self.stg is None or self.pose is None:return None
+        return sum((g-p)*u for g,p,u in zip(self.stg,self.pose,self.motion_direction))
+
+    def _near_stg(self, now):
+        remaining = self.motion_remaining()
+        if (self.motion.near_stg_no_realign and not self.near_stg_latched and remaining is not None and
+                remaining <= self.motion.near_stg_distance+1e-12):
+            self.near_stg_latched = True
+            self.walk_guard.event('near_stg_no_realign',now,remaining_m=remaining,
+                pose=tuple(self.pose),stg=self.stg,axis=self.motion_direction,
+                source_stamp_ns=getattr(self,'pose_source_stamp_ns',None))
+        return self.motion.near_stg_no_realign and self.near_stg_latched
+
+    def motion_status(self):
+        return dict(near_stg_latched=self.near_stg_latched,remaining_m=self.motion_remaining(),
+            origin=self.motion_origin,direction=self.motion_direction,profile_attempts=self.profile_attempts,
+            profile_heading=self.profile_heading,profile_fresh_s=self.profile_samples.settle_fresh_s,
+            pose=tuple(self.pose) if self.pose is not None else None,
+            source_stamp_ns=getattr(self,'pose_source_stamp_ns',None),
+            sample_time=self.pose_time if math.isfinite(self.pose_time) else None)
+
+    def _needs_alignment(self, now):
+        if self._near_stg(now):return False
+        if self.motion.coarse_turn_profile:
+            return abs(math.degrees(self.walk_guard.error(self.pose,self.stg)[1])) > self.motion.coarse_turn_release_deg+1e-9
+        return self.walk_guard.needs_alignment(self.pose,self.stg,
+            ignore_distance=self.motion.near_stg_no_realign)
+
+    def _profile_fail(self, reason, now):
+        self.walk_guard.event(reason,now,**self.motion_status())
+        self.stop(reason)
+        return (0.,0.)
+
+    def _start_profile_turn(self, now):
+        if self.profile_attempts >= self.motion.coarse_turn_attempts:
+            return self._profile_fail('coarse_turn_align_limit',now)
+        self.profile_attempts += 1
+        self.profile_heading = math.atan2(self.stg[1]-self.pose[1],self.stg[0]-self.pose[0])
+        self.profile_turn_sign = math.copysign(1.,wrap(self.profile_heading-self.pose[2]))
+        if self.profile_clock_start is None:self.profile_clock_start=now
+        self.profile_samples.pause_samples()
+        self.walk_guard.event('coarse_turn_started',now,**self.motion_status())
+        return (0.,0.)
+
+    def _profile_budget(self, now):
+        samples=self.profile_samples
+        samples.observe_value(self.pose_time,self.pose[2],now,self.pose_timeout,
+                              identity=getattr(self,'pose_source_stamp_ns',None))
+        if samples.samples and samples.samples[-1][1] != self.pose[2]:
+            samples.pause_samples()
+            return False
+        elapsed=samples.settle_elapsed(self.profile_clock_start,now,self.pose_timeout,self.pose_timeout)
+        if elapsed >= self.motion.coarse_turn_timeout_s-1e-9:
+            self._profile_fail('coarse_turn_timeout',now)
+            return False
+        return True
+
+    def _profile_turn(self, now, settle_state):
+        if self._near_stg(now):return self.wait(settle_state,now,self.turn_settle)
+        error=wrap(self.profile_heading-self.pose[2])
+        cfg=self.motion
+        if abs(math.degrees(error)) <= cfg.coarse_turn_stop_deg+1e-9 or error*self.profile_turn_sign<=0:
+            self.walk_guard.event('coarse_turn_stop',now,error_deg=math.degrees(error),**self.motion_status())
+            return self.wait(settle_state,now,self.turn_settle)
+        cap=(cfg.coarse_turn_near_wz if settle_state=='guard_settle' or
+             abs(math.degrees(error)) <= cfg.coarse_turn_slow_deg else cfg.coarse_turn_max_wz)
+        rate=min(max(cfg.coarse_turn_kp*abs(error),cfg.coarse_turn_min_wz),cap)
+        return (0.,math.copysign(rate,error))
 
     def reset_recovery(self):
         self.recovery_count = 0
@@ -133,8 +242,13 @@ class Navigation:
         self.stg = None
         self.origin = self.direction = None
         self.reset_recovery()
+        self._reset_motion_segment()
+        if self.walk_guard is not None:
+            self.walk_guard.reset()
 
     def stop(self, reason='Stopped'):
+        if self.walk_guard is not None:
+            self.walk_guard.finish_alignment(self.walk_guard.last_now)
         if self.state.startswith('recovery_'):
             self.recovery_events.append(('recovery_cancelled', dict(attempt=self.recovery_count,
                 direction=self.recovery_direction, reason=reason)))
@@ -149,6 +263,8 @@ class Navigation:
         return math.hypot(self.goal[0]-self.pose[0], self.goal[1]-self.pose[1]) <= self.goal_tol
 
     def remaining(self):
+        if self.motion.near_stg_no_realign and self.motion_direction is not None:
+            return self.motion_remaining()
         return sum((g-p)*u for g, p, u in zip(self.stg, self.pose, self.direction))
 
     def wait(self, state, now, seconds):
@@ -172,6 +288,20 @@ class Navigation:
         """Fixed settle elapsed AND the body has effectively stopped turning."""
         if now < self.until:
             return False
+        if self.walk_guard is not None:
+            sample_gap = min(self.pose_timeout, self.walk_guard.config.stop_sample_gap_s)
+            budget_gap = self.pose_timeout if self.motion.near_stg_no_realign or self.motion.coarse_turn_profile else sample_gap
+            fresh_s = self.walk_guard.settle_elapsed(self.until, now, self.pose_timeout,
+                                                     max_gap=budget_gap)
+            if self.walk_guard.stopped_since(self.until-self.turn_settle, now,
+                    self.turn_stop_window, self.turn_stop_yaw_rate, self.pose_timeout,
+                    max_gap=sample_gap):
+                return True
+            if fresh_s >= self.turn_stop_extra-1e-9:
+                self.walk_guard.event('walk_guard_stop_timeout', now, state=self.state,
+                                      settle_fresh_s=fresh_s)
+                self.stop('walk_guard_stop_timeout')
+            return False
         rate = self.yaw_rate()
         if rate is None:
             return True                      # no measurement: keep original timing
@@ -185,19 +315,95 @@ class Navigation:
         return False
 
     def begin_walk(self, now):
+        if self.walk_guard is not None:
+            self.walk_guard.finish_alignment(now)
         if self.goal_reached():
             self.segment_normal = False
             if self.recorder is not None:
                 self.recorder.anomaly('Final goal radius triggered STG stop')
+            return self.wait('walk_settle', now, self.walk_settle)
+        self._near_stg(now)
+        if (self.motion.near_stg_no_realign and self.motion_direction is not None and
+                self.motion_remaining() <= self.epsilon):
             return self.wait('walk_settle', now, self.walk_settle)
         self.origin = self.pose[:2]
         delta = tuple(g-p for g, p in zip(self.stg, self.origin))
         distance = math.hypot(*delta)
         if distance <= self.epsilon:
             return self.wait('walk_settle', now, self.walk_settle)
+        if self.walk_guard is not None and self._needs_alignment(now):
+            return self.guard_align(now, 'turn_heading_recheck')
         self.direction = tuple(d/distance for d in delta)
         self.state = 'walk'
+        if self.walk_guard is not None:
+            self.walk_guard.pause()
         return self.walk(now)
+
+    def guard_align(self, now, reason):
+        if self._near_stg(now):return self.begin_walk(now)
+        guard = self.walk_guard
+        guard.pause()
+        self.segment_normal = False
+        if guard.align_count >= guard.config.align_attempts:
+            guard.event('walk_guard_align_limit', now, reason=reason)
+            self.stop('walk_guard_align_limit')
+            return (0., 0.)
+        guard.align_count += 1
+        guard.begin_alignment(now)
+        guard.align_started = now
+        guard.event('walk_guard_realign', now, reason=reason, attempt=guard.align_count,
+                    pose=tuple(self.pose), stg=self.stg)
+        if self.recorder is not None:
+            self.recorder.anomaly('Walk guard realignment: '+reason)
+        self.reason = 'Walk guard: stopping before STG realignment'
+        # Stop first; do not reverse a moving body's angular velocity immediately.
+        return self.wait('guard_before_align', now, self.turn_settle)
+
+    def guard_tick(self, now):
+        guard = self.walk_guard
+        if self.state in ('guard_before_align', 'guard_settle'):
+            if not self.turn_settled(now):
+                return (0., 0.)
+            if self.state == 'guard_settle':
+                if not self._needs_alignment(now):
+                    return self.begin_walk(now)
+                return self.guard_align(now, 'post_align_heading_recheck')
+            if (self.motion.near_stg_no_realign or self.motion.coarse_turn_profile) and not self._needs_alignment(now):
+                return self.begin_walk(now)
+            self.state = 'guard_align'
+            guard.align_started = now
+            self.reason = 'Walk guard: aligning to current STG'
+            if self.motion.coarse_turn_profile:return self._start_profile_turn(now)
+            return (0., 0.)
+        if self.state == 'guard_align':
+            if self._near_stg(now):return self.wait('guard_settle',now,self.turn_settle)
+            if self.motion.coarse_turn_profile:return self._profile_turn(now,'guard_settle')
+            if now-guard.align_started >= guard.config.align_timeout_s:
+                guard.event('walk_guard_align_timeout', now)
+                self.stop('walk_guard_align_timeout')
+                return (0., 0.)
+            distance, error = guard.error(self.pose, self.stg)
+            if distance <= self.epsilon or abs(math.degrees(error)) <= guard.config.align_deg:
+                return self.wait('guard_settle', now, self.turn_settle)
+            rate = min(max(guard.config.align_kp*abs(error), guard.config.align_min_wz),
+                       guard.config.align_max_wz)
+            return (0., math.copysign(rate, error))
+        if self.state == 'guard_replan_settle':
+            if now >= self.until:
+                self.state = 'plan'
+            return (0., 0.)
+        raise RuntimeError('Unknown walk guard state: '+self.state)
+
+    def passage_clear(self, a, b):
+        """Stop-side passage check: separate stop inflation when provided."""
+        if self.stop_clear is None:
+            return self.clear(a, b, 1.)
+        return self.stop_clear(a, b)
+
+    def stg_segment_clear(self, a, b):
+        """Normal planning corridor, or the node's exact current connector."""
+        callback=getattr(self,'stg_clear',None)
+        return self.clear(a,b,math.inf) if callback is None else callback(a,b)
 
     def walk(self, now):
         if self.goal_reached() or self.remaining() <= self.epsilon:
@@ -206,22 +412,52 @@ class Navigation:
             if self.recorder is not None and self.goal_reached():
                 self.recorder.anomaly('Final goal radius triggered STG stop')
             return self.wait('walk_settle', now, self.walk_settle)
-        if not self.clear(self.pose[:2], self.stg, 1.):
+        if not self.passage_clear(self.pose[:2], self.stg):
+            if self.walk_guard is not None:
+                self.walk_guard.pause()
             self.segment_normal = False
             if self.recorder is not None:
                 self.recorder.anomaly('Obstacle wait')
             return self.wait('obstacle', now, 2.)
+        if self.walk_guard is not None:
+            reason = self.walk_guard.check_walk(self.pose, self.stg, self.remaining(), self.pose_time,
+                allow_heading=not self._near_stg(now),ignore_distance=self.motion.near_stg_no_realign)
+            if reason == 'heading':
+                return self.guard_align(now, 'persistent_stg_heading')
+            if reason == 'progress':
+                guard = self.walk_guard
+                guard.replan_count += 1
+                guard.event('walk_guard_no_progress', now, attempt=guard.replan_count,
+                            **guard.diagnostics)
+                if self.recorder is not None:
+                    self.recorder.abort('Walk guard: no progress')
+                guard.pause()
+                self.segment_normal = False
+                if guard.replan_count >= guard.config.progress_replans:
+                    self.stop('walk_guard_no_progress_limit')
+                    return (0., 0.)
+                self.reason = 'Walk guard: no progress; settling before replanning'
+                return self.wait('guard_replan_settle', now, self.walk_settle)
         self.segment_walked = True
         return (self.speed, 0.)
 
     def tick(self, now):
         if not self.active:
             return None
+        if self.walk_guard is not None:
+            self.walk_guard.last_now = now
+        if self.walk_guard is not None and self.pose is not None:
+            self.walk_guard.observe(self.pose_time, self.pose, now, self.pose_timeout,
+                identity=(getattr(self,'pose_source_stamp_ns',None)
+                    if self.motion.near_stg_no_realign or self.motion.coarse_turn_profile else None))
         if self.pose is not None:
             if not self.yaw_samples or self.pose[2] != self.yaw_samples[-1][1]:
                 self.yaw_samples.append((now, self.pose[2]))
         self.paused = self.input_problem(now)
         if self.paused:
+            self.profile_samples.pause_samples()
+            if self.walk_guard is not None:
+                self.walk_guard.pause()
             self.segment_normal = False
             if self.recorder is not None:
                 self.recorder.anomaly(self.paused)
@@ -231,6 +467,16 @@ class Navigation:
                 self.reason = 'Recovery preparation interrupted: '+self.paused
                 return self.wait('plan_wait', now, self.plan_retry_s)
             return (0., 0.)
+        if self.motion.coarse_turn_profile:
+            self._near_stg(now)
+            if self.profile_clock_start is not None and self.state in ('turn','turn_settle','guard_before_align','guard_align','guard_settle') and not self.near_stg_latched:
+                if not self._profile_budget(now):return (0.,0.)
+            else:self.profile_samples.pause_samples()
+        if self._near_stg(now):
+            if self.state in ('turn','turn_out'):return self.wait('turn_settle',now,self.turn_settle)
+            if self.state=='turn_out_settle':self.state='turn_settle'
+        if self.walk_guard is not None and self.state.startswith('guard_'):
+            return self.guard_tick(now)
         if self.state == 'recovery_prepare':
             info = self.recovery(self.pose)
             if info['near_count'] == 0:
@@ -284,12 +530,15 @@ class Navigation:
                 self.stop('No valid STG; navigation stopped')
                 return (0., 0.)
             self.stg = tuple(stg)
+            self._motion_segment()
+            if self.walk_guard is not None:
+                self.walk_guard.new_segment()
             self.segment_walked = False
             self.segment_normal = True
             if self.recorder is not None:
                 self.recorder.begin(self.pose, self.stg)
             self.reason = 'Navigation running'
-            if not self.clear(self.pose[:2], self.stg, math.inf):
+            if not self.stg_segment_clear(self.pose[:2], self.stg):
                 self.reason = 'STG segment is blocked'
                 if self.recorder is not None:
                     self.recorder.abort('STG segment is blocked; replanning')
@@ -297,10 +546,19 @@ class Navigation:
             self.planning_failures = 0
             self.failure_map_revision = None
             error = wrap(math.atan2(self.stg[1]-self.pose[1], self.stg[0]-self.pose[0])-self.pose[2])
+            if self._near_stg(now):
+                self.state='walk_start'
+                return (0.,0.)
+            if self.motion.coarse_turn_profile:
+                if self._near_stg(now) or abs(math.degrees(error)) <= self.motion.coarse_turn_release_deg+1e-9:
+                    self.state='walk_start'
+                    return (0.,0.)
+                self.state='turn'
+                return self._start_profile_turn(now)
             self.previous_error = self.turn_error = error
             self.turn_sign = 1 if error > self.left_tol else (-1 if error < self.right_tol else 0)
             if not self.turn_sign:
-                if abs(error) <= self.min_turn_angle:
+                if abs(error) <= self.min_turn_angle or not self.turn_out_enabled:
                     # No settling delay without a turn. Let callbacks and input
                     # freshness checks run after potentially slow planning.
                     self.state = 'walk_start'
@@ -324,7 +582,8 @@ class Navigation:
                 return self.wait('turn_out_settle', now, self.turn_settle)
             return (0., self.turn_sign*self.omega)
         if self.state == 'turn_out_settle':
-            if now < self.until:
+            ready = self.turn_settled(now) if self.walk_guard is not None else now >= self.until
+            if not ready:
                 return (0., 0.)
             error = wrap(math.atan2(self.stg[1]-self.pose[1], self.stg[0]-self.pose[0])-self.pose[2])
             self.previous_error = self.turn_error = error
@@ -334,6 +593,7 @@ class Navigation:
             self.state = 'turn'
             return (0., 0.)
         if self.state == 'turn':
+            if self.motion.coarse_turn_profile:return self._profile_turn(now,'turn_settle')
             error = wrap(math.atan2(self.stg[1]-self.pose[1], self.stg[0]-self.pose[0])-self.pose[2])
             self.turn_error += wrap(error-self.previous_error)
             self.previous_error = error
@@ -356,7 +616,9 @@ class Navigation:
                 return self.wait('walk_settle', now, self.walk_settle)
             if now < self.until:
                 return (0., 0.)
-            if self.clear(self.pose[:2], self.stg, 1.):
+            if self.passage_clear(self.pose[:2], self.stg):
+                if self.walk_guard is not None:
+                    return self.begin_walk(now)
                 self.state = 'walk'
                 self.segment_walked = True
                 return (self.speed, 0.)

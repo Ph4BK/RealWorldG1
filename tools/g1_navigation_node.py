@@ -21,7 +21,7 @@ from visualization_msgs.msg import Marker
 from unitree_api.msg import Request
 from skimage.morphology import binary_dilation, disk
 from g1_navigation_core import Navigation, velocity_xyz
-from g1_final_approach import PosNav
+from g1_final_approach import PosNav, FineApproachConfig, fine_metrics
 from stg_error_recorder import STGErrorRecorder, STGErrorLog
 from experiment_recorder import TrialRecorder, ExperimentSTGRecorder
 from posnav_fmm.planner import plan_snapshot
@@ -31,6 +31,11 @@ from live_bev_core import (grid_start_status, obstacle_map_topic, OBSTACLE_MODES
                            STATIC_TEST_WARNING)
 from posnav_fmm.visibility import line_is_collision_free
 from g1_control_pose import LatestControlPose, odometry_matrix
+from g1_walk_guard import WalkGuardConfig
+from g1_navigation_options import (add_navigation_options, checked_options, options_from_args,
+                                   planning_options, FINE_DEFAULTS, guard_config, motion_config)
+from g1_motion_policy import (effective_planning_config, source_identity, grid_identity, runtime_parameters,
+                              inflation_masks, inflation_start_status, band_planning_options)
 
 
 def planar(message):
@@ -69,7 +74,10 @@ def recovery_occupancy(occupancy, origin, resolution, pose, radius=.75, near_rad
 
 class NavigationNode(Node):
     def __init__(self, config, record_stg_errors=False, stg_error_dir=None, experiment_dir=None,
-                 obstacle_mode='dynamic'):
+                 obstacle_mode='dynamic', walk_guard=False, clearance_weight=0.,
+                 clearance_safe_distance=.60, clip_stg_goal=False, **fine):
+        self.navigation_options = checked_options(walk_guard, clearance_weight,
+                                                 clearance_safe_distance, clip_stg_goal, **fine)
         map_topic = obstacle_map_topic(obstacle_mode)
         super().__init__('g1_navigation')
         self.obstacle_mode, self.navigation_map_topic = obstacle_mode, map_topic
@@ -77,7 +85,7 @@ class NavigationNode(Node):
             self.get_logger().warning(STATIC_TEST_WARNING + '; map=' + map_topic)
         else:
             self.get_logger().info('Obstacle mode: dynamic; map=' + map_topic)
-        self.cfg = yaml.safe_load(Path(config).read_text())
+        self.cfg = effective_planning_config(yaml.safe_load(Path(config).read_text()),self.navigation_options)
         self.latest_control_pose = LatestControlPose(Navigation.pose_timeout, self.cfg['registration_timeout_s'])
         self.control_pose_status = dict(valid=False, reason='Waiting for latest-odometry control pose')
         self.last_control_pose_token = None
@@ -85,20 +93,35 @@ class NavigationNode(Node):
         self.control_odom_source_stamp_ns = None
         self.error_log = None
         self.recording_error = None
+        self.post_fine = None
         if record_stg_errors:
             directory = stg_error_dir or Path(__file__).resolve().parents[1]/'stg_error_results'
             self.error_log = STGErrorLog(directory)
             self.get_logger().info('STG error records: '+str(self.error_log.path))
         self.control = PosNav(self.plan, self.clear, self.navigation_route,
                                   STGErrorRecorder() if record_stg_errors else None,
-                                  recovery=self.recovery_options)
+                                  recovery=self.recovery_options,
+                                   walk_guard=guard_config(self.navigation_options) if walk_guard else None,
+                                  fine=FineApproachConfig(**{k: self.navigation_options[k] for k in FINE_DEFAULTS}))
+        self.control.configure_motion(motion_config(self.navigation_options),
+            legacy_omega=self.navigation_options['coarse_omega'],no_turn_out=self.navigation_options['no_turn_out'])
+        self.allow_goal_in_inflation=self.navigation_options['allow_goal_in_inflation']
+        self.control.allow_goal_in_inflation=self.allow_goal_in_inflation
+        self.control.goal_clear=self.goal_clear
+        self.control.stg_clear=self.stg_clear
+        self.stg_corridor=None
+        self.runtime_sources=source_identity(Path(__file__).resolve().parent)
+        self.task_map_identity=None
         self.experiment = None
         if experiment_dir is not None:
             parameters = {key: getattr(self.control, key) for cls in (Navigation, PosNav)
                           for key, value in vars(cls).items() if isinstance(value, (int, float))}
             parameters.pop('goal_tol', None)
             self.experiment = TrialRecorder(experiment_dir, dict(control=parameters, planning=self.cfg,
-                obstacle_mode=obstacle_mode, navigation_map_topic=map_topic))
+                obstacle_mode=obstacle_mode, navigation_map_topic=map_topic,
+                navigation_options=self.navigation_options,
+                walk_guard_config=vars(self.control.walk_guard.config) if walk_guard else None,
+                runtime_parameters=self.runtime_parameters()))
             self.control.recorder = ExperimentSTGRecorder(self.experiment)
         self.goal = None
         self.goal_pose = None
@@ -106,10 +129,12 @@ class NavigationNode(Node):
         self.record_grid = self.record_grid_metadata = None
         self.last_health_time = -math.inf
         self.last_health_key = None
-        self.occupancy = self.free = None
+        self.occupancy = self.free = self.stop_free = None
         self.start_status_cache = None
         self.map_stamp = None
         self.last_status = None
+        self.last_stg_selection = None
+        self.last_inflation_connections = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.commands = self.create_publisher(Request, '/api/sport/request', 1)
         self.status = self.create_publisher(String, '/g1/navigation/status', latched)
@@ -127,6 +152,8 @@ class NavigationNode(Node):
         self.create_subscription(Empty, '/g1/navigation/cancel', lambda _: self.cancel('Localization stopped or map reset'), 10)
         if self.experiment:
             self.create_subscription(String, '/g1/live_bev/status', self.on_health, latched)
+            # Display-chain pose is kept separately, never used by control/error metrics.
+            self.create_subscription(PoseStamped, '/g1/live_bev/robot', self.on_display_pose, 5)
         self.create_service(Trigger, '/g1/navigation/start', self.start)
         self.create_service(Trigger, '/g1/navigation/stop', self.stop)
         from g1_action_server import NavigationAction
@@ -147,6 +174,12 @@ class NavigationNode(Node):
             self.experiment.command(velocity, self.control.duration)
 
     def cancel(self, reason):
+        self.last_stg_selection = None
+        if self.post_fine is not None:
+            if self.experiment:
+                self.experiment.event('fine_post_completion_unavailable', reason='observation_cancelled: '+reason,
+                    origin_trial_id=self.post_fine['origin_trial_id'])
+            self.post_fine = None
         if self.control.active:
             self.send((0., 0.))
         if self.experiment:
@@ -176,6 +209,11 @@ class NavigationNode(Node):
 
     def flush_recordings(self):
         # Called only after command publication, including immediate stop paths.
+        if self.control.walk_guard is not None:
+            while self.control.walk_guard.events:
+                event, data = self.control.walk_guard.events.popleft()
+                if self.experiment:
+                    self.experiment.event(event, map_ref=self.snapshot(), **data)
         while self.control.recovery_events:
             event, data = self.control.recovery_events.popleft()
             if event == 'recovery_started':
@@ -189,7 +227,7 @@ class NavigationNode(Node):
                 self.experiment.event(event, map_ref=self.snapshot(), **data)
         while self.control.final_events:
             event, data = self.control.final_events.popleft()
-            if event == 'fine_approach_started':
+            if event in ('fine_approach_started', 'fine_entry_align_started'):
                 marker = Marker()
                 marker.header.frame_id = 'map'
                 marker.ns = 'stg_macro'
@@ -199,6 +237,9 @@ class NavigationNode(Node):
             if self.experiment:
                 self.experiment.event(event, map_ref=self.snapshot(), **data)
             if event == 'fine_approach_completed':
+                self.post_fine = dict(due=time.monotonic()+3., final_goal=self.control.final_goal,
+                    direction=self.control.position_direction, completion_stamp=self.pose_source_stamp,
+                    origin_trial_id=self.experiment.trial_id if self.experiment else None)
                 self.get_logger().info('Final approach completed: XY error %.4f m, yaw error %.4f rad; position tolerance not checked' %
                     (data['internal_error_m'], data['final_yaw_error_rad']))
         if self.experiment and self.experiment.writer.error and self.recording_error is None:
@@ -304,6 +345,7 @@ class NavigationNode(Node):
             self.control.pose = planar(msg)
             self.control.pose_time = time.monotonic() if sample_time is None else sample_time
             self.pose_source_stamp = stamp_ns(msg)
+            self.control.pose_source_stamp_ns = self.pose_source_stamp
             if self.experiment:
                 self.experiment.pose(self.control.pose, self.pose_source_stamp, self.control.state)
         except ValueError as exc:
@@ -311,7 +353,47 @@ class NavigationNode(Node):
             if self.experiment:
                 self.experiment.event('pose_invalid', reason=str(exc), source_stamp_ns=stamp_ns(msg))
 
+    def on_display_pose(self, msg):
+        try:
+            pose = planar(msg)
+        except ValueError:
+            return
+        self.experiment.event('display_pose_sample', source_stamp_ns=stamp_ns(msg),
+                              pose=pose, pose_source='live_bev_robot_display_only')
+
+    def record_post_fine(self):
+        """Passive observation only; never delays Action completion or commands motion."""
+        pending = self.post_fine
+        if pending is None:
+            return
+        now = time.monotonic()
+        if self.control.active:
+            reason = 'new_navigation_started'
+        elif now < pending['due']:
+            return
+        elif (self.control.pose is not None and now-self.control.pose_time < self.control.pose_timeout
+                and self.control.pose_time >= pending['due']
+                and self.pose_source_stamp != pending['completion_stamp']):
+            if self.experiment:
+                self.experiment.event('fine_post_completion_3s', source_stamp_ns=self.pose_source_stamp,
+                    pose_source='latest_fastlio_control_pose', pose=tuple(self.control.pose),
+                    sample_time_monotonic=self.control.pose_time, observation_time_monotonic=now,
+                    requested_time_monotonic=pending['due'], origin_trial_id=pending['origin_trial_id'],
+                    final_goal=pending['final_goal'], position_direction=pending['direction'],
+                    **fine_metrics(pending['final_goal'], pending['direction'], self.control.pose))
+            self.post_fine = None
+            return
+        elif now < pending['due']+self.control.pose_timeout:
+            return
+        else:
+            reason = 'no_fresh_sample_after_3s'
+        if self.experiment:
+            self.experiment.event('fine_post_completion_unavailable', reason=reason,
+                                  origin_trial_id=pending['origin_trial_id'])
+        self.post_fine = None
+
     def on_map(self, msg):
+        self.stg_corridor=None  # A new packet invalidates even a repeated source timestamp.
         try:
             stamp = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
             if msg.header.frame_id != 'map' or stamp == 0:
@@ -332,8 +414,10 @@ class NavigationNode(Node):
             self.occupancy = data != 0
             self.origin = np.array([msg.info.origin.position.x, msg.info.origin.position.y])
             self.resolution = .05
-            self.free = ~binary_dilation(self.occupancy, disk(self.cfg['fmm_inflation_cells']))
+            self.free,self.stop_free=inflation_masks(self.occupancy,self.cfg)
+            self.task_map_identity=grid_identity(self.occupancy,self.origin,self.resolution)
             self.control.map_revision = stamp
+            self.control.stop_clear=self.stop_clear
             self.refresh_control_pose()
             if self.experiment:
                 self.record_grid = data.astype(np.int8)
@@ -360,14 +444,14 @@ class NavigationNode(Node):
         key = (self.map_stamp, xy)
         cached = self.start_status_cache
         if cached is None or cached[0] != key:
-            status = grid_start_status(self.free, getattr(self, 'origin', None),
+            status = inflation_start_status(self.free,self.stop_free,getattr(self, 'origin', None),
                                        getattr(self, 'resolution', None), xy)
             self.start_status_cache = (key, status)
         return self.start_status_cache[1]
 
     def require_start_free(self):
         xy = None if self.control.pose is None else self.control.pose[:2]
-        status = grid_start_status(self.free, getattr(self, 'origin', None),
+        status = inflation_start_status(self.free,self.stop_free,getattr(self, 'origin', None),
                                    getattr(self, 'resolution', None), xy, nearest=False)
         if status['start_free'] is not True:
             reason = status['start_rejection_reason']
@@ -378,18 +462,59 @@ class NavigationNode(Node):
     def navigation_route(self, goal):
         """Use pre only when its cell and the complete pre-to-goal segment are free."""
         self.require_start_free()
+        gfree = (self.stop_free if (self.allow_goal_in_inflation and
+                 getattr(self,'stop_free',None) is not None) else self.free)
         def free_point(point):
             r, c = self.cell(point)
-            return 0 <= r < self.free.shape[0] and 0 <= c < self.free.shape[1] and self.free[r,c]
+            return 0 <= r < gfree.shape[0] and 0 <= c < gfree.shape[1] and gfree[r,c]
         if not free_point(goal[:2]):
             raise ValueError('Final goal is outside the map or occupied after obstacle inflation')
+        if self.control.fine.fine_pre_fallback:
+            attempts = []
+            for distance in (.30, .20, .15):  # 11-25 review candidates; not field calibration.
+                pre = (goal[0]-distance*math.cos(goal[2]), goal[1]-distance*math.sin(goal[2]))
+                if not free_point(pre):
+                    reason = 'Pre is outside the map or occupied after inflation'
+                elif not line_is_collision_free(self.cell(pre), self.cell(goal[:2]), gfree):
+                    reason = 'Pre-to-goal segment is blocked'
+                else:
+                    reason = 'Pre-to-goal segment is clear'
+                    attempts.append(dict(candidate_dist=distance, pre=pre, accepted=True, reason=reason))
+                    return dict(pre=pre, reason=reason, attempts=attempts)
+                attempts.append(dict(candidate_dist=distance, pre=pre, accepted=False, reason=reason))
+            return dict(pre=None, reason='All pre candidates rejected', attempts=attempts)
         pre = (goal[0]-self.control.pre_distance*math.cos(goal[2]),
                goal[1]-self.control.pre_distance*math.sin(goal[2]))
         if not free_point(pre):
             return dict(pre=None, reason='Pre is outside the map or occupied after inflation')
-        if not line_is_collision_free(self.cell(pre), self.cell(goal[:2]), self.free):
+        if not line_is_collision_free(self.cell(pre), self.cell(goal[:2]), gfree):
             return dict(pre=None, reason='Pre-to-goal segment is blocked')
         return dict(pre=pre, reason='Pre-to-goal segment is clear')
+
+    def stop_clear(self, start, end):
+        # Preserve the field version's complete-STG horizon; do not shorten to 1m.
+        return self.stop_free is not None and line_is_collision_free(self.cell(start),self.cell(end),self.stop_free)
+
+    def goal_clear(self, start, goal):
+        """Goal admission is separate from execution passage clearance."""
+        if self.free is None:return False
+        r,c=self.cell(goal)
+        admitted=self.stop_free if self.allow_goal_in_inflation else self.free
+        if not (0<=r<admitted.shape[0] and 0<=c<admitted.shape[1] and admitted[r,c]):return False
+        return self.stop_clear(start,goal)
+
+    def stg_clear(self, start, stg):
+        corridor=self.stg_corridor
+        if (corridor is None or corridor['map_stamp']!=self.map_stamp or
+                not np.allclose(start,corridor['start'],rtol=0,atol=1e-9) or
+                not np.allclose(stg,corridor['stg'],rtol=0,atol=1e-9)):
+            return self.control.clear(start,stg,math.inf)
+        from posnav_fmm.visibility import segment_clearance
+        free=corridor['free']
+        a=(np.asarray(start)[::-1]-self.origin[::-1])/self.resolution
+        b=(np.asarray(stg)[::-1]-self.origin[::-1])/self.resolution
+        return (self.stop_clear(start,stg) and line_is_collision_free(self.cell(start),self.cell(stg),free) and
+                segment_clearance(a,b,~free,self.resolution,self.resolution)>1e-12)
 
     def clear(self, start, end, limit):
         start, end = np.asarray(start), np.asarray(end)
@@ -404,6 +529,9 @@ class NavigationNode(Node):
         return clear
 
     def plan(self, pose, goal):
+        self.last_stg_selection = None
+        self.last_inflation_connections = None
+        self.stg_corridor = None
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.ns = 'stg_macro'
@@ -418,7 +546,9 @@ class NavigationNode(Node):
             plan = plan_snapshot(self.occupancy, self.origin, self.resolution, pose, goal,
                 inflation_cells=self.cfg['fmm_inflation_cells'], step_cells=self.cfg['fmm_step_cells'],
                 max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'],
-                direct_goal_range=self.control.direct_stg_range)
+                direct_goal_range=self.control.direct_stg_range,
+                **band_planning_options(self.cfg,self.navigation_options),
+                **planning_options(self.navigation_options))
         except Exception as exc:
             if self.experiment:
                 self.experiment.planning(pose, goal, map_ref,
@@ -427,11 +557,25 @@ class NavigationNode(Node):
             if isinstance(exc, PlanningRetry):
                 self.stg_display.publish(marker)
             raise
+        self.last_stg_selection = getattr(plan,'stg_selection',None)
+        self.last_inflation_connections=getattr(plan,'inflation_connections',None)
+        if self.last_inflation_connections and plan.stg_xy is not None:
+            self.stg_corridor=dict(map_stamp=self.map_stamp,start=tuple(pose),stg=tuple(plan.stg_xy),
+                                   free=plan.traversible)
+        if self.experiment and self.last_inflation_connections:
+            self.experiment.event('inflation_connections',connections=self.last_inflation_connections,
+                                  start_xy=pose,goal_xy=goal,map_ref=map_ref,task_map_identity=self.task_map_identity)
+        if self.last_stg_selection is not None:
+            self.last_stg_selection=dict(self.last_stg_selection,
+                task_map_sha256=self.task_map_identity['sha256'] if self.task_map_identity else None,
+                pose_source_stamp_ns=getattr(self.control,'pose_source_stamp_ns',None),
+                planned_monotonic=planning_started)
         if self.experiment:
             self.experiment.planning(pose, goal, map_ref,
                 'selected' if plan.stg_xy is not None else 'no_stg', plan.reason,
                 stg=plan.stg_xy, rollout_rc=plan.rollout_rc,
                 final_stg=getattr(plan, 'final_stg', False),
+                stg_selection=self.last_stg_selection,
                 duration_s=time.monotonic()-planning_started)
         if plan.stg_xy is not None:
             marker.action = Marker.ADD
@@ -473,10 +617,16 @@ class NavigationNode(Node):
             raise ValueError(problem)
         self.require_start_free()
         self.control.start(goal_pose, time.monotonic())
+        self.last_stg_selection = None
+        self.last_inflation_connections = None
+        self.stg_corridor = None
+        self.record_post_fine()  # Mark a previous 3s observation unavailable on a new task.
         self.goal_pose = tuple(goal_pose)
         self.goal = self.goal_pose[:2]
         if self.experiment:
             self.experiment.begin(self.goal_pose, self.control.pose, self.pose_source_stamp, None)
+            self.experiment.event('runtime_parameters',parameters=self.runtime_parameters(),
+                                  task_map_identity=self.task_map_identity)
             self.experiment.event('initial_task_map', map_ref=self.snapshot())
         self.publish_goal()
 
@@ -514,12 +664,16 @@ class NavigationNode(Node):
             self.cancel('Navigation stopped: '+str(exc))
         # Disk I/O follows command publication, never precedes the stop command.
         self.flush_recordings()
+        self.record_post_fine()
         self.publish_status()
         self.action.update()
 
     def destroy_node(self):
         self.action.close()
         return super().destroy_node()
+
+    def runtime_parameters(self):
+        return runtime_parameters(self.control,self.cfg,self.navigation_options,self.runtime_sources)
 
     def publish_status(self):
         c = self.control
@@ -530,6 +684,14 @@ class NavigationNode(Node):
                                  obstacle_mode=self.obstacle_mode,
                                  navigation_map_topic=self.navigation_map_topic,
                                  dynamic_obstacles_used=self.obstacle_mode == 'dynamic',
+                                 navigation_options=self.navigation_options,
+                                 runtime_parameters=self.runtime_parameters(),task_map_identity=self.task_map_identity,
+                                 stg_selection=self.last_stg_selection,
+                                 inflation_connections=self.last_inflation_connections,
+                                 motion_diagnostics=c.motion_status(),
+                                 fine_entry_diagnostics=c.entry_status(),
+                                 walk_guard_diagnostics=(self.control.walk_guard.status(time.monotonic())
+                                     if self.control.walk_guard is not None else None),
                                  control_pose_source='latest_fastlio', control_pose=self.control_pose_status,
                                  **self.start_status(),
                                  stg=c.stg, recovery_count=c.recovery_count,
@@ -569,10 +731,13 @@ def main():
     parser.add_argument('--experiment-dir', type=Path, help='Internal: existing experiment session directory')
     parser.add_argument('--obstacle-mode', choices=OBSTACLE_MODES, default='dynamic',
                         help='static_test ignores realtime obstacles; controlled static-map experiments only')
+    add_navigation_options(parser)
     args = parser.parse_args()
+    options_from_args(args)  # Reject malformed options before creating ROS resources.
     rclpy.init()
     node = NavigationNode(args.config, record_stg_errors=args.record_stg_errors,
-                          experiment_dir=args.experiment_dir, obstacle_mode=args.obstacle_mode)
+                          experiment_dir=args.experiment_dir, obstacle_mode=args.obstacle_mode,
+                          **options_from_args(args))
     def interrupted(*_):
         raise KeyboardInterrupt
     # Keep ROS alive until the final zero velocity has been published.

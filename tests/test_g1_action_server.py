@@ -251,6 +251,156 @@ class ActionTest(unittest.TestCase):
         self.assertEqual(r.result.reason, 'cancelled')
         self.stopped()
 
+    def test_final_goal_behind_returns_aborted_result_without_heading_align(self):
+        from g1_final_approach import FineApproachConfig
+        self.node.control.fine = FineApproachConfig(fine_goal_behind=True)
+        self.node.control.route_callback = lambda g: dict(pre=None, reason='direct fine fixture')
+        self.xy_yaw = (1., 1., 0.)
+        self.refresh()
+        goal = self.goal(1.25); goal.g_y = 1.
+        h = self.send(goal)
+        self.assertTrue(h.accepted)
+        self.wait_until(lambda: self.node.control.state == 'fine_approach')
+        self.xy_yaw = (1., 1., -math.radians(130.))
+        result = self.spin(h.get_result_async())
+        self.assertEqual(result.status, 6)
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason, 'final_goal_behind')
+        self.assertIsNone(self.node.action.current)
+        self.assertNotEqual(self.node.control.state, 'heading_align')
+        self.stopped()
+
+    def test_position_settle_timeout_maps_to_terminal_failure(self):
+        h = self.send()
+        self.node.control.stop('fine_position_settle_timeout')
+        self.node.send((0., 0., 0.))
+        result = self.spin(h.get_result_async())
+        self.assertEqual(result.status, 6)
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason, 'fine_position_settle_timeout')
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
+    def test_entry_timeout_returns_real_terminal_action_result(self):
+        from g1_final_approach import FineApproachConfig
+        self.node.control.fine = FineApproachConfig(fine_entry_align=True, fine_entry_align_timeout=.15)
+        self.node.control.route_callback = lambda g: dict(pre=None, reason='direct entry fixture')
+        self.xy_yaw = (1., 1., -math.pi/3); self.refresh()
+        goal = self.goal(1.25); goal.g_y = 1.
+        handle = self.send(goal)
+        result = self.spin(handle.get_result_async())
+        self.assertEqual(result.status, 6)
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason, 'fine_entry_align_timeout')
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
+    def test_blocked_passage_returns_real_terminal_action_result_in_both_phases(self):
+        from g1_final_approach import FineApproachConfig
+        from unittest.mock import Mock
+        for angle in (0., -math.pi/3):
+            with self.subTest(angle=angle):
+                self.node.control.fine = FineApproachConfig(fine_entry_align=True, fine_passage_waits=1)
+                # Speed up only the legacy wait duration, not the terminal path.
+                self.node.control.fine_obstacle_wait = .05
+                route = Mock(return_value=dict(pre=None, reason='direct blocked-passage fixture'))
+                self.node.control.route_callback = route
+                plan = Mock(return_value=(1.25, 1.))
+                self.node.control.plan_callback = plan
+                self.node.control.goal_clear = Mock(return_value=True)
+                self.xy_yaw = (1., 1., angle); self.refresh()
+                goal = self.goal(1.25); goal.g_y = 1.
+                handle = self.send(goal)
+                self.assertTrue(handle.accepted)
+                phase = 'fine_approach' if angle == 0. else 'fine_entry_align'
+                self.wait_until(lambda: self.node.control.state == phase)
+                self.node.control.goal_clear.return_value = False
+                result = self.spin(handle.get_result_async())
+                self.assertEqual(result.status, 6)  # ABORTED on real Action transport
+                self.assertFalse(result.result.success)
+                self.assertEqual(result.result.reason, 'fine_passage_blocked')
+                self.assertIsNone(self.node.action.current)
+                self.stopped()
+                plan.assert_not_called()
+                self.assertEqual(route.call_count, 1)
+
+    def test_round1_turn_timeout_returns_real_action_failure_and_zero(self):
+        from g1_walk_guard import WalkGuard,WalkGuardConfig
+        from g1_motion_policy import MotionPolicy
+        self.node.control.walk_guard=WalkGuard(WalkGuardConfig())
+        self.node.control.configure_motion(MotionPolicy(coarse_turn_profile=True,coarse_turn_timeout_s=.15))
+        self.node.control.route_callback=lambda g:dict(pre=(3.,1.),reason='coarse profile fixture')
+        self.node.control.plan_callback=lambda p,g:g
+        self.node.control.plan=self.node.control._plan_stg
+        self.xy_yaw=(1.,1.,math.pi/3);self.refresh()
+        goal=self.goal(4.);goal.g_y=1.
+        handle=self.send(goal)
+        self.assertTrue(handle.accepted)
+        result=self.spin(handle.get_result_async())
+        self.assertEqual(result.status,6)
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason,'coarse_turn_timeout')
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
+    def test_round1_attempt_limit_returns_real_action_failure(self):
+        from g1_walk_guard import WalkGuard,WalkGuardConfig
+        from g1_motion_policy import MotionPolicy
+        self.node.control.walk_guard=WalkGuard(WalkGuardConfig())
+        self.node.control.configure_motion(MotionPolicy(coarse_turn_profile=True,coarse_turn_attempts=1))
+        self.node.control.route_callback=lambda g:dict(pre=(3.,1.),reason='coarse profile fixture')
+        self.node.control.plan_callback=lambda p,g:g
+        self.node.control.plan=self.node.control._plan_stg
+        self.xy_yaw=(1.,1.,math.pi/3);self.refresh()
+        goal=self.goal(4.);goal.g_y=1.
+        handle=self.send(goal)
+        self.wait_until(lambda:self.node.control.state=='turn')
+        self.assertAlmostEqual(self.node.control.profile_heading,0.)
+        self.xy_yaw=(1.,1.,0.)
+        self.wait_until(lambda:self.node.control.state=='turn_settle')
+        self.xy_yaw=(1.,1.,-math.radians(8.))
+        result=self.spin(handle.get_result_async())
+        self.assertEqual(result.status,6)
+        self.assertEqual(result.result.reason,'coarse_turn_align_limit')
+        self.assertFalse(result.result.success)
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
+    def test_round1_profile_cancel_is_terminal_without_retry(self):
+        from g1_walk_guard import WalkGuard,WalkGuardConfig
+        from g1_motion_policy import MotionPolicy
+        self.node.control.walk_guard=WalkGuard(WalkGuardConfig())
+        self.node.control.configure_motion(MotionPolicy(coarse_turn_profile=True,near_stg_no_realign=True))
+        self.node.control.route_callback=lambda g:dict(pre=(3.,1.),reason='coarse profile fixture')
+        self.node.control.plan_callback=lambda p,g:g
+        self.node.control.plan=self.node.control._plan_stg
+        self.xy_yaw=(1.,1.,math.pi/3);self.refresh()
+        goal=self.goal(4.);goal.g_y=1.
+        handle=self.send(goal)
+        self.wait_until(lambda:self.node.control.state=='turn')
+        self.spin(handle.cancel_goal_async())
+        result=self.spin(handle.get_result_async())
+        self.assertEqual(result.status,5)
+        self.assertFalse(result.result.success)
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
+    def test_lateral_guard_returns_real_terminal_action_result(self):
+        from g1_final_approach import FineApproachConfig
+        self.node.control.fine = FineApproachConfig(fine_lateral_guard=True, fine_stop_layered=True)
+        self.node.control.route_callback = lambda g: dict(pre=None, reason='direct lateral fixture')
+        self.xy_yaw = (1., 1., 0.); self.refresh()
+        goal = self.goal(1.25); goal.g_y = 1.
+        handle = self.send(goal)
+        self.wait_until(lambda: self.node.control.state == 'fine_approach')
+        self.xy_yaw = (1.17, .89, 0.)
+        result = self.spin(handle.get_result_async())
+        self.assertEqual(result.status, 6)
+        self.assertFalse(result.result.success)
+        self.assertEqual(result.result.reason, 'fine_lateral_exceeded')
+        self.assertIsNone(self.node.action.current)
+        self.stopped()
+
     def test_recovery_sectors_use_uninflated_cell_centers_and_body_yaw(self):
         import numpy as np
         occ = np.zeros((41, 41), dtype=bool)

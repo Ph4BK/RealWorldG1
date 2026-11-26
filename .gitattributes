@@ -2,3 +2,6 @@
 posnav/bridge/*.py -text whitespace=cr-at-eol
 # Map manifests verify raw bytes, including retained provenance CRLF files.
 maps/619_go2base/** -text whitespace=cr-at-eol,-blank-at-eof
+maps/full_lab_v1/** -text whitespace=cr-at-eol,-blank-at-eof
+# Frozen regression sources retain their normalized historical bytes and SHA256.
+tests/baselines/** -text whitespace=cr-at-eol,-blank-at-eof

@@ -37,6 +37,12 @@ from skimage.morphology import binary_dilation, disk
 from posnav_fmm.planner import plan_snapshot
 from experiment_recorder import ExperimentSession
 from g1_control_pose import monotonic_clock_id
+from g1_navigation_options import (add_navigation_options, options_from_args, planning_options,
+                                   forward_navigation_options, guard_config, motion_config)
+from g1_motion_policy import (effective_planning_config, source_identity, grid_identity,
+    inflation_masks, inflation_start_status, band_planning_options, inflation_parameters)
+from dataclasses import asdict
+from g1_observation_filter import ObservationFilter, add_observation_options, observation_options
 
 
 def stamp_s(stamp):
@@ -97,6 +103,10 @@ class LiveBEV(Node):
         map_topic = obstacle_map_topic(obstacle_mode)
         super().__init__('g1_live_bev')
         self.args = args
+        self.navigation_options = options_from_args(args)
+        self.observation_config = observation_options(args)
+        self.last_filter_state = None
+        self.last_filter_record = -math.inf
         self.obstacle_mode, self.navigation_map_topic = obstacle_mode, map_topic
         self.experiment = getattr(args, 'experiment', None)
         self.cfg = yaml.safe_load(args.config.read_text())
@@ -113,6 +123,12 @@ class LiveBEV(Node):
         assert np.allclose(self.core.origin, self.map_config['origin_xy_m'])
         assert self.core.res == self.map_config['resolution_m']
         self.z = float(yaml.safe_load((args.map_dir / 'metadata.yaml').read_text())['initial_imu_xyz_map'][2])
+        self.cfg=effective_planning_config(self.cfg,self.navigation_options)
+        self.runtime_sources=source_identity(Path(__file__).resolve().parent)
+        # Keep the real map-loader block independently executable by its offline
+        # package validator; install optional perception state after map validation.
+        self.core.observation_filter = (ObservationFilter(self.observation_config)
+                                        if self.observation_config is not None else None)
         # Disabling fusion would still clear static obstacles in the annulus.
         # Keep a separate immutable union, without changing the dynamic task.
         self.static_test_occupancy = self.core.static | self.core.no_go
@@ -125,6 +141,8 @@ class LiveBEV(Node):
         if self.experiment:
             self.experiment.event('obstacle_mode_selected', obstacle_mode=obstacle_mode,
                                   navigation_map_topic=map_topic)
+            self.experiment.writer.json('assets/config/observation_filter_parameters.json',
+                self.observation_filter_status())
         self.allow_initial_clear = self.cfg.get('allow_initial_clear', False)
         if not isinstance(self.allow_initial_clear, bool):
             raise ValueError('allow_initial_clear must be an explicit boolean')
@@ -329,7 +347,9 @@ class LiveBEV(Node):
             self.plan=plan_snapshot(self.navigation_occupancy().copy(),self.core.origin,self.core.res,
                 robot[:2,3],(self.goal['x'],self.goal['y']),
                 inflation_cells=self.cfg['fmm_inflation_cells'], step_cells=self.cfg['fmm_step_cells'],
-                max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'])
+                max_stgs=self.cfg['fmm_max_stgs'], min_step_cells=self.cfg['fmm_min_step_cells'],
+                **band_planning_options(self.cfg,self.navigation_options),
+                **planning_options(self.navigation_options))
             if self.plan.stg_xy is not None:
                 marker=Marker();marker.header.frame_id='map';marker.header.stamp=self.get_clock().now().to_msg()
                 marker.ns='stg_macro';marker.id=0;marker.type=Marker.SPHERE;marker.action=Marker.ADD
@@ -773,9 +793,22 @@ class LiveBEV(Node):
                 marker.points.extend([start,end])
         self.boundary.publish(marker)
 
+    def observation_filter_status(self):
+        return dict(ground=bool(self.observation_config and self.observation_config.ground),
+            speckles=bool(self.observation_config and self.observation_config.speckles),
+            parameters=asdict(self.observation_config) if self.observation_config else None,
+            diagnostics=(dict(self.core.observation_filter.diagnostics)
+                         if self.core.observation_filter is not None else None))
+
     def publish_status(self):
         self.last_status=time.monotonic()
         self.publish_control_reference()
+        filters = self.observation_filter_status()
+        if self.experiment and self.observation_config:
+            state = filters['diagnostics']['ground_state']
+            if state != self.last_filter_state or self.last_status-self.last_filter_record >= 1.:
+                self.experiment.event('observation_filter_status', **filters)
+                self.last_filter_state, self.last_filter_record = state, self.last_status
         message = self.error or self.registration_error or self.message
         if self.last_status < self.notice_until:
             message += '\n' + self.notice
@@ -786,18 +819,31 @@ class LiveBEV(Node):
                 self.last_status-self.received['odom'] <= self.cfg['sensor_timeout_s']):
             current_xy = (self.transform @ self.odom[-1][1])[:2,3]
         if self.start_check_free is None:
-            self.start_check_free = ~binary_dilation(self.navigation_occupancy(), disk(self.cfg['fmm_inflation_cells']))
-        start = grid_start_status(self.start_check_free, self.core.origin, self.core.res, current_xy)
+            self.planning_start_check_free,self.start_check_free=inflation_masks(self.navigation_occupancy(),self.cfg)
+        start = inflation_start_status(self.planning_start_check_free,self.start_check_free,
+                                       self.core.origin,self.core.res,current_xy)
         self.status.publish(String(data=json.dumps(dict(pose=self.selected,goal=self.goal,running=self.child is not None,
             control_pose_protocol=1, control_session_id=self.control_session,
             control_map_epoch=self.control_map_epoch, control_reference_revision=self.control_reference_revision,
             obstacle_mode=self.obstacle_mode, navigation_map_topic=self.navigation_map_topic,
             dynamic_obstacles_used=self.obstacle_mode == 'dynamic',
-            **start, start_check_inflation_m=self.cfg['fmm_inflation_cells']*self.core.res,
+            navigation_options=self.navigation_options,
+            runtime_parameters=dict(schema=1,role='preview',
+                planning={key:self.cfg[key] for key in ('fmm_inflation_cells','fmm_step_cells','fmm_max_stgs','fmm_min_step_cells')},
+                requested_motion_policy=asdict(motion_config(self.navigation_options)),
+                requested_walk_guard=asdict(guard_config(self.navigation_options)) if self.navigation_options['walk_guard'] else None,
+                clearance={key:self.navigation_options[key] for key in ('clearance_weight','clearance_safe_distance','clip_stg_goal','stg_clearance_m')},
+                **inflation_parameters(self.cfg,self.navigation_options,self.core.res),
+                startup_source_sha256_lf=self.runtime_sources),
+            task_map_identity=grid_identity(self.navigation_occupancy(),self.core.origin,self.core.res),
+            observation_filters=filters,
+            **start, start_check_inflation_m=self.cfg['fmm_stop_inflation_cells']*self.core.res,
             allow_initial_clear=self.allow_initial_clear, initial_clear_count=self.initial_clear_count,
             fixed_no_go_cells=self.core.no_go_cells,
             fixed_no_go_protected_cells=self.core.last_no_go_protected_cells,
             plan_message=self.plan_message,
+            stg_selection=getattr(self.plan,'stg_selection',None),
+            inflation_connections=getattr(self.plan,'inflation_connections',None),
             pending_registrations=len(self.pending_registrations),
             registration_deferred=self.registration_deferred,
             registration_wait_timeouts=self.registration_wait_timeouts,
@@ -811,6 +857,7 @@ def navigation_command(root, args, experiment=None):
     return ([sys.executable, str(root/'tools/g1_navigation_node.py'), '--config', str(args.config)] +
             (['--record-stg-errors'] if args.record_stg_errors else []) +
             (['--experiment-dir', str(experiment.path)] if experiment else []) +
+            forward_navigation_options(args) +
             (['--obstacle-mode', mode] if mode != 'dynamic' else []))
 
 
@@ -826,7 +873,12 @@ def main():
                         help='static_test ignores realtime obstacles; controlled static-map experiments only')
     parser.add_argument('--record-experiment',action='store_true',
                         help='Save a self-contained timestamped experiment bundle on G1')
-    args=parser.parse_args(); args.run_dir.mkdir(parents=True,exist_ok=True)
+    add_navigation_options(parser)
+    add_observation_options(parser)
+    args=parser.parse_args()
+    options_from_args(args)
+    observation_options(args)
+    args.run_dir.mkdir(parents=True,exist_ok=True)
     experiment = None
     if args.record_experiment:
         experiment = ExperimentSession(root, args.map_dir, args.config)

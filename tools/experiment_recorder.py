@@ -160,10 +160,23 @@ annotations.jsonl 初始为空，人工可填 timestamp、trial_id、干扰类�
 
 当前流程为 STG 到 pre、位置接近、最终 yaw 对准和停止等待。
 result.success 表示一轮流程完成，不承诺请求 pos_tol；停止等待后的 XY/yaw 误差单独记录。
-末端位置停止条件为 remaining<=coast；remaining 是沿位置阶段开始时实际位置指向目标
+默认末端位置停止条件为 remaining<=coast；remaining 是沿位置阶段开始时实际位置指向目标
 的固定方向计算的有符号投影剩余距离。事件保存方向及投影距离，L2 误差仍单独记录。
 位置阶段 remaining<=fine_no_turn_distance 时停止转向修正，继续前进至投影停止条件；
 该阈值独立于 coast，均保存到 navigation_parameters.json。受阻处理仍优先于前进。
+可选精调开关/阈值见 navigation_parameters.json 的 navigation_options；默认全部关闭。
+fine_stop_layered 开启后替换旧 coast 门：欧氏圈、近端实际进近投影或越过目标平面停止；
+横偏较大时不再盲直走。fine_goal_behind 可直接零速失败，不再转最终朝向。
+fine_position_stop / fine_position_settled / fine_yaw_stop / fine_yaw_settled /
+fine_approach_completed 分别保存原 control_pose 源戳与四种误差口径。
+位置停稳可选连续新鲜XY样本确认，仍不是物理脚底停稳证明；yaw等待仍为原固定时间。
+fine_post_completion_3s 为完成后至少3秒的首个新鲜独立控制样本，带 origin_trial_id；
+不延迟Action、不发动作。缺样本/新任务会记 unavailable，退出进程则不能保证这条观测。
+display_pose_sample 单独保存旧显示位姿，不得与上述控制源交叉计算端点。
+v3的fine_entry_align/fine_lateral_guard默认关闭。入场对准只发零线速度转动，
+停转确认后用最新位姿重建进近轴；只在实际盲直走且欧氏<=15cm时检查横偏。
+fine_entry_*事件保留原control_pose源戳、入场临时射线、方位差、次数与有效耗时；
+fine_lateral_exceeded保存实际进近轴横偏。两新失败码均结束Action，不自动重试。
 yaw 进入停止阈值后等待并记录，不自动反复补位或补转。
 不代表独立物理真值或正式验收结论。
 等待障碍/等待输入/规划重试不是任务失败。未知、不完整记录不自动算成功。
@@ -198,7 +211,8 @@ class ExperimentSession:
         files = ['tools/g1_navigation_core.py', 'tools/g1_navigation_node.py', 'tools/g1_action_server.py',
                  'tools/stg_error_recorder.py', 'tools/experiment_recorder.py', 'tools/g1_final_approach.py',
                  'tools/live_bev_core.py', 'tools/live_bev_node.py', 'tools/g1_live_desktop.py',
-                 'tools/g1_control_pose.py',
+                 'tools/g1_control_pose.py', 'tools/g1_observation_filter.py',
+                 'tools/g1_navigation_options.py', 'tools/g1_walk_guard.py',
                  'tools/run_g1_live_bev.sh', 'tools/run_live_bev.sh',
                  'posnav/deploy/start_desktop.sh', 'posnav/deploy/env.sh',
                  'fastlio/rviz/live_bev.rviz']
@@ -320,14 +334,15 @@ class TrialRecorder:
                 **self.stamp(key), grid=metadata, data_file=Path(relative).name))
         return self.map_refs[key]
 
-    def planning(self, pose, goal, map_ref, outcome, reason, stg=None, rollout_rc=None, duration_s=None, final_stg=False):
+    def planning(self, pose, goal, map_ref, outcome, reason, stg=None, rollout_rc=None, duration_s=None, final_stg=False,
+                 stg_selection=None):
         if not self.trial_id:
             return
         self.attempt += 1
         self.writer.line(self.relative('planning.jsonl'), dict(**self.stamp(),
             attempt_id=self.attempt, start_xy=pose, goal_xy=goal, map_ref=map_ref,
             outcome=outcome, reason=reason, selected_stg=stg, rollout_rc=rollout_rc,
-            duration_s=duration_s, final_stg=final_stg))
+            duration_s=duration_s, final_stg=final_stg, stg_selection=stg_selection))
 
     def pose(self, pose, source_stamp_ns, state):
         self.latest_pose_stamp = source_stamp_ns
