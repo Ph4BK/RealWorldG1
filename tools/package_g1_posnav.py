@@ -18,6 +18,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix='g1-posnav-bundle-') as directory:
         staged=Path(directory)/'RealWorldG1';staged.mkdir()
         files=['docs/G1_PosNav真机部署.md','posnav/README.md','tools/live_bev_node.py','tools/live_bev_core.py','tools/run_live_bev.sh','tools/g1_live_desktop.py',
+               'tools/g1_control_pose.py',
+               'tools/g1_observation_filter.py','tools/g1_walk_guard.py',
+               'tools/g1_navigation_options.py','tools/g1_motion_policy.py',
+               'docs/619_navigation_hardening_20261126.md','docs/619_right_drift_20261126.md',
+               'docs/images/g1_right_drift_20261126.png',
                'fastlio/config/live_bev.yaml','fastlio/rviz/live_bev.rviz',
                'tests/test_live_bev_core.py','tests/test_live_bev_node.py','tests/test_posnav_fmm.py',
                'tools/g1_navigation_core.py','tools/g1_navigation_node.py','tools/g1_action_server.py','tools/stg_error_recorder.py',
@@ -27,8 +32,14 @@ def main():
                'tests/test_experiment_navigation.py',
                'tools/run_g1_live_bev.sh','tests/test_stg_error_recorder.py',
                'tests/test_g1_navigation_core.py','tests/test_g1_navigation_node.py',
-               'tests/check_g1_navigation_loop.py']
-        for folder in ['posnav/deploy','posnav/interfaces','posnav/bridge','tools/posnav_fmm','fastlio/rviz/pose_replay_panel']:
+               'tests/check_g1_navigation_loop.py','tests/frozen_baselines.py',
+               'tests/test_observation_filter.py','tests/test_walk_guard.py',
+               'tests/test_clearance_planning.py','tests/test_round1_motion.py',
+               'tests/test_stg_clearance.py','tests/test_field_bands.py',
+               'tests/test_fine_entry.py','tests/test_fine_stopping.py',
+               'tests/test_package_g1_posnav.py']
+        for folder in ['posnav/deploy','posnav/interfaces','posnav/bridge','tools/posnav_fmm',
+                       'tests/baselines','fastlio/rviz/pose_replay_panel']:
             files += [str(p.relative_to(root)) for p in (root/folder).rglob('*') if p.is_file() and "__pycache__" not in p.parts]
         map_dir=root/'maps/full_lab_v1'
         manifest=json.loads((map_dir/'package_manifest.json').read_text())

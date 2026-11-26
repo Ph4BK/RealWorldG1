@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
+from g1_observation_filter import ObservationFilter
 
 
 OBSTACLE_MODES = ('dynamic', 'static_test')
@@ -120,7 +121,7 @@ def initial_map_from_odom(x, y, yaw, z, imu_samples, odom_pose):
 class RollingBEV:
     def __init__(self, static, origin, res, window=10, min_points=2,
                  z_min=.05, z_max=1.3, radius=2.,
-                 max_window_age=2., inner_radius=.3, no_go=None):
+                 max_window_age=2., inner_radius=.3, no_go=None, observation_filter=None):
         self.static = np.asarray(static, dtype=bool).copy()
         self.origin = np.asarray(origin, dtype=float)
         self.res = float(res)
@@ -150,11 +151,15 @@ class RollingBEV:
         self.local = np.zeros_like(self.static)
         self.mask = np.zeros_like(self.static)
         self.last_stamp = None
+        self.observation_filter = (ObservationFilter(observation_filter)
+                                   if observation_filter is not None else None)
 
     def pause(self):
         self.frames.clear()
         self.local.fill(False)
         self.mask.fill(False)
+        if self.observation_filter is not None:
+            self.observation_filter.pause()
         # Keep last_stamp so repeated observations cannot refill the window.
 
     def reset(self):
@@ -201,6 +206,11 @@ class RollingBEV:
         if self.last_stamp is not None and stamp - self.last_stamp > self.max_window_age:
             self.pause()
         self.last_stamp = stamp
+        if self.observation_filter is not None:
+            points, changed = self.observation_filter.filter_points(points, np.asarray(pose_xy_yaw),
+                self.static | self.no_go, self.origin, self.res, self.radius, self.z_min, self.z_max)
+            if changed:
+                self.frames.clear()  # Do not mix unconfirmed/confirmed ground policies in a window.
         q = points[(points[:, 2] >= self.z_min) & (points[:, 2] <= self.z_max)]
         indices = np.floor((q[:, :2] - self.origin) / self.res).astype(np.int64)
         height, width = self.static.shape
@@ -214,7 +224,11 @@ class RollingBEV:
             self.frames.popleft()
         if len(self.frames) < self.window:
             return False
-        self.local = sum(c for _, c in self.frames) >= self.min_points
+        total = sum(c for _, c in self.frames)
+        self.local = total >= self.min_points
+        if self.observation_filter is not None and self.observation_filter.config.speckles:
+            self.local &= self.observation_filter.supported_cells(self.frames, total,
+                self.task, self.static | self.no_go, self.min_points)
         self.mask = self.region(*pose_xy_yaw[:2])
         self.task[self.mask] = self.local[self.mask]
         self.last_no_go_protected_cells = int((self.mask & self.no_go & ~self.local).sum())

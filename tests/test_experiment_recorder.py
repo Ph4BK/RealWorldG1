@@ -52,6 +52,8 @@ class ExperimentTest(unittest.TestCase):
         self.assertTrue(info['recording_complete'])
         self.assertEqual((base/'assets/map/map.pcd').read_bytes(), (ROOT/'maps/full_lab_v1/map.pcd').read_bytes())
         self.assertTrue((base/'assets/config/localization_0001.json').exists())
+        for name in ('g1_observation_filter.py','g1_walk_guard.py','g1_navigation_options.py'):
+            self.assertEqual((base/'assets/source/tools'/name).read_bytes(),(ROOT/'tools'/name).read_bytes())
         task = json.loads((base/'trials/trial_0001/task.json').read_text())
         result = json.loads((base/'trials/trial_0001/result.json').read_text())
         self.assertEqual(task['goal'], [3., 0., 1.])

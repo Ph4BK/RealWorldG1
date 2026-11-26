@@ -1,0 +1,38 @@
+{
+  "fine_previous.py": {
+    "sha256": "760eef1a475ec7481bbaae7201db63eb0dc5ba42cf74636d3ea3609c4bb0ea69",
+    "frozen_stage": "fine_previous.py"
+  },
+  "fine_v2.py": {
+    "sha256": "707d60a8e8351adae570fe83d5eb794d54ebde635212196a2a3c038d29a7ebfc",
+    "frozen_stage": "fine_v2.py"
+  },
+  "core_v3r2.py": {
+    "sha256": "b826ec20d0706bca68bd62a4d59b6c17744a46582d13eadf5e8d3094ed17ed50",
+    "frozen_stage": "core_v3r2.py"
+  },
+  "field_planner.py": {
+    "sha256": "4687640542b74d0985110a9be6c6b7f46709c80ef6bd706f8f95a7c30eceb4bf",
+    "frozen_stage": "field_planner.py"
+  },
+  "round1_posnav_fmm/errors.py": {
+    "sha256": "488b3b7d1d811b5b5d7f09f36611c8b8a69cc93c6d5dac3fcfbf626d54fcde3b",
+    "frozen_stage": "round1_posnav_fmm"
+  },
+  "round1_posnav_fmm/fmm_planner.py": {
+    "sha256": "02fea72f2322b76dd5011b1227d3a4e5a232cd4cbcd64ec0bc46bf4e4f06b4e1",
+    "frozen_stage": "round1_posnav_fmm"
+  },
+  "round1_posnav_fmm/planner.py": {
+    "sha256": "62a4e2456e29d4c274936b16530e15f04aecc2d11c63640f2cf2ca68d60a3218",
+    "frozen_stage": "round1_posnav_fmm"
+  },
+  "round1_posnav_fmm/visibility.py": {
+    "sha256": "7eb5ee359fd2d36906c889e7668d0368e2e2f0054b7829eff4fb118dd9392997",
+    "frozen_stage": "round1_posnav_fmm"
+  },
+  "round1_posnav_fmm/__init__.py": {
+    "sha256": "2d3d6f1756d46a546a8c0940c8999ac1e9b22d4a6494d18997d2ba32bb34a975",
+    "frozen_stage": "round1_posnav_fmm"
+  }
+}

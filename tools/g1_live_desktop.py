@@ -8,7 +8,47 @@ import signal
 import socket
 import subprocess
 import time
-from live_bev_node import Child
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--site', choices=('803', '619'), default='803',
+                        help='Select the map and matching runtime configuration (default: 803)')
+    parser.add_argument('--map-dir', type=Path)
+    parser.add_argument('--config', type=Path)
+    parser.add_argument('--obstacle-mode', choices=('dynamic', 'static_test'), default='dynamic')
+    parser.add_argument('--record-stg-errors', action='store_true')
+    parser.add_argument('--record-experiment', action='store_true')
+    return parser.parse_args(argv)
+
+
+def interface_command(root, args):
+    """Resolve one map/config pair before starting desktop processes."""
+    map_name = '619_go2base' if args.site == '619' else 'full_lab_v1'
+    map_dir = args.map_dir or root/'maps'/map_name
+    # The original 619 installation keeps maps beside RealWorldG1.
+    legacy_map = root.parent/'maps'/map_name
+    if args.map_dir is None and args.site == '619' and not map_dir.exists() and legacy_map.is_dir():
+        map_dir = legacy_map
+    config = args.config
+    if config is None:
+        runtime_config = map_dir/'runtime_live_bev.yaml'
+        config = runtime_config if args.site == '619' or runtime_config.is_file() else root/'fastlio/config/live_bev.yaml'
+    map_dir, config = map_dir.resolve(), config.resolve()
+    required = [map_dir/name for name in ('map.pcd', 'bev_occupancy.npz', 'bev_config.json', 'metadata.yaml')]
+    if args.site == '619':
+        required.append(map_dir/'no_go.npz')
+    missing = [str(path) for path in [*required, config] if not path.is_file()]
+    if missing:
+        raise SystemExit('Missing PosNav map/config files: ' + ', '.join(missing))
+    command = ['bash', str(root/'tools/run_live_bev.sh'),
+               '--map-dir', str(map_dir), '--config', str(config),
+               '--obstacle-mode', args.obstacle_mode]
+    if args.record_stg_errors:
+        command.append('--record-stg-errors')
+    if args.record_experiment:
+        command.append('--record-experiment')
+    return command
 
 
 def wait_port(port, child, timeout=15):
@@ -23,11 +63,12 @@ def wait_port(port, child, timeout=15):
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--record-stg-errors',action='store_true')
-    parser.add_argument('--record-experiment',action='store_true')
-    args=parser.parse_args()
+    args=parse_args()
     root=Path(__file__).resolve().parents[1]
+    app_command=interface_command(root, args)
+    print('PosNav site=%s; map=%s; config=%s; obstacle_mode=%s' %
+          (args.site, app_command[3], app_command[5], args.obstacle_mode), flush=True)
+    from live_bev_node import Child
     run=root/'.cache/live_bev';run.mkdir(parents=True,exist_ok=True)
     lock=(root/'.cache/desktop.lock').open('w')
     try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -67,9 +108,7 @@ def main():
         wait_port(5901,vnc)
         web=launch('web',['websockify','--web=/usr/share/novnc','127.0.0.1:6081','127.0.0.1:5901'])
         wait_port(6081,web)
-        app=launch('interface',['bash',str(root/'tools/run_live_bev.sh')]+
-                   (['--record-stg-errors'] if args.record_stg_errors else [])+
-                   (['--record-experiment'] if args.record_experiment else []))
+        app=launch('interface',app_command)
         print('READY: tunnel laptop 6081 -> G1 127.0.0.1:6081; open http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale',flush=True)
         while all(c.proc.poll() is None for c in children):time.sleep(.25)
         if any(c.proc.poll() is not None for c in children if c is not app):
